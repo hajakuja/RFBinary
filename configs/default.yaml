@@ -1,0 +1,24 @@
+features:
+  segment_ms: 20
+  nfft: 1024
+  noverlap: 120
+  resize_h: 224
+  resize_w: 224
+  shard_size: 512
+  workers: 4
+  log_power: true
+  normalize: true
+
+capture_defaults:
+  center_freqs_hz: [2437000000, 5735000000]
+  fallback_sample_rate_sps: 20971520
+  gain_levels: [low, mid, high]
+
+training:
+  batch_size: 64
+  epochs: 5
+  learning_rate: 0.0003
+  weight_decay: 0.0001
+  freeze_features: true
+  val_split: 0.1
+  target_far: 0.05

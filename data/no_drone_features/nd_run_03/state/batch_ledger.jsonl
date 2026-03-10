@@ -1,0 +1,1 @@
+{"batch_id": "batch_00000", "batch_seconds": 0.2828648090362549, "capture_ids": ["bg90002"], "copied_bytes": 8000, "copy_seconds": 0.0005140304565429688, "extract_seconds": 0.2815358638763428, "files": 1, "reclaimed_bytes": 8000, "samples_written": 100, "status": "completed", "ts": "2026-03-08T09:07:16Z"}

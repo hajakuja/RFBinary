@@ -1,0 +1,8 @@
+{
+  "src_dir": "/root/RFBinaryDetect/data/merged/no_drone_merged",
+  "out_dir": "/root/RFBinaryDetect/data/curated/no_drone_8k",
+  "target_samples": 8192,
+  "selected_samples": 8192,
+  "selected_shards": 4,
+  "nominal_shard_samples": 2048
+}

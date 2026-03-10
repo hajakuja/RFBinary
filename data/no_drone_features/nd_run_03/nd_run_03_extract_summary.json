@@ -1,0 +1,9 @@
+{
+  "adapter": "custom-iq",
+  "tasks_total": 1,
+  "tasks_processed_this_run": 1,
+  "samples_written": 100,
+  "output_dir": "/root/RFBinaryDetect/data/no_drone_features/nd_run_03",
+  "prefix": "nd_run_03",
+  "next_shard_index": 7
+}

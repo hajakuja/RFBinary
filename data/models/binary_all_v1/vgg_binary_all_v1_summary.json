@@ -1,0 +1,11 @@
+{
+  "threshold": 0.79,
+  "val_metrics": {
+    "val_roc_auc": 0.9817685246779808,
+    "val_pr_auc": 0.9876357348247566,
+    "val_f1": 0.13348331458555213,
+    "val_far": 0.0
+  },
+  "train_size": 30639,
+  "val_size": 3404
+}

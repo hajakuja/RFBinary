@@ -1,0 +1,2 @@
+capture_id,file_path,label,source_domain,center_freq_hz,sample_rate_sps,gain_db,session_id,timestamp,environment
+bg90002,/tmp/rfbd_smoke_3fmf2y66/nd_run_03/bg90002_20260306T214943Z_2437000000Hz_1000sps_35g_s01.s16,no_drone,custom_bg,2437000000,1000,35,s01,2026-03-06T21:49:43Z,unknown

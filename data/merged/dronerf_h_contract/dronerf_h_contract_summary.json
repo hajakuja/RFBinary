@@ -1,0 +1,12 @@
+{
+  "out_dir": "/root/RFBinaryDetect/data/merged/dronerf_h_contract",
+  "prefix": "dronerf_h_contract",
+  "samples_written": 2724,
+  "label_counts": {
+    "0": 492,
+    "1": 2232
+  },
+  "source_counts": {
+    "dronerf": 2724
+  }
+}

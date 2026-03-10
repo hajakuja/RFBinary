@@ -1,0 +1,14 @@
+{
+  "out_dir": "/root/RFBinaryDetect/data/datasets/binary_all_v1",
+  "prefix": "binary_all_v1",
+  "samples_written": 34043,
+  "label_counts": {
+    "0": 9152,
+    "1": 24891
+  },
+  "source_counts": {
+    "dronedetect": 20487,
+    "dronerf": 5364,
+    "custom_bg": 8192
+  }
+}

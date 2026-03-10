@@ -1,0 +1,2 @@
+capture_id,file_path,label,source_domain,center_freq_hz,sample_rate_sps,gain_db,session_id,timestamp,environment
+bg00001,/data/rf/bg00001_20260305T213010Z_5735000000Hz_20971520sps_50g_s01.s16,no_drone,custom_bg,5735000000,20971520,50,s01,2026-03-05T21:30:10Z,outdoor_busy

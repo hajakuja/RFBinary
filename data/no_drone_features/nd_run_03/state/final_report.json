@@ -1,0 +1,21 @@
+{
+  "ts": "2026-03-08T09:07:16Z",
+  "source_dir": "/tmp/rfbd_smoke_3fmf2y66/nd_run_03",
+  "manifest": "/tmp/rfbd_smoke_3fmf2y66/manifest2.csv",
+  "manifest_clean": "/root/RFBinaryDetect/data/no_drone_features/nd_run_03/state/manifest_clean.csv",
+  "features_dir": "/root/RFBinaryDetect/data/no_drone_features/nd_run_03",
+  "staging_dir": "/root/RFBinaryDetect/data/staging/nd_run_03",
+  "batch_size": 1,
+  "workers": 1,
+  "run_id": "nd_run_03",
+  "prefix": "nd_run_03",
+  "pending_batches": 1,
+  "completed_capture_ids_total": 1,
+  "completed_capture_ids_this_run": 1,
+  "failed_batches_this_run": 0,
+  "failed_batches_total": 0,
+  "copied_bytes_this_run": 8000,
+  "reclaimed_bytes_this_run": 8000,
+  "elapsed_seconds": 0.2833092212677002,
+  "source_immutable_verified": true
+}

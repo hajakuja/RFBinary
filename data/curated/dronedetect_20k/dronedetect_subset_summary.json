@@ -1,0 +1,11 @@
+{
+  "src_dir": "/root/Features/ARR_SPEC_1024_20",
+  "out_dir": "/root/RFBinaryDetect/data/curated/dronedetect_20k",
+  "target_samples": 20000,
+  "selected_samples": 20487,
+  "selected_files": 41,
+  "skipped_invalid_files": [
+    "BLUE_SPEC_PHA_FY_1024.npy",
+    "CLEAN_SPEC_PHA_FY_1024.npy"
+  ]
+}

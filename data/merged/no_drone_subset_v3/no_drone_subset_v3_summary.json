@@ -1,0 +1,11 @@
+{
+  "out_dir": "/root/RFBinaryDetect/data/merged/no_drone_subset_v3",
+  "prefix": "no_drone_subset_v3",
+  "samples_written": 4096,
+  "label_counts": {
+    "0": 4096
+  },
+  "source_counts": {
+    "custom_bg": 4096
+  }
+}

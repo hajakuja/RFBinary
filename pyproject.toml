@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=69.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rfbinarydetect"
+version = "0.1.0"
+description = "Binary drone/no-drone RF pipeline with fast feature extraction"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy==2.3.5",
+  "scipy==1.16.3",
+  "opencv-python==4.11.0.86",
+  "pandas==2.3.3",
+  "torch==2.9.1",
+  "torchvision==0.24.1",
+  "tqdm==4.67.1",
+  "PyYAML==6.0.3",
+]
+
+[project.scripts]
+rfbd = "rfbd.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

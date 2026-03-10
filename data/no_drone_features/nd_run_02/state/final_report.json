@@ -1,0 +1,21 @@
+{
+  "ts": "2026-03-08T11:15:15Z",
+  "source_dir": "../gargoyle/EDGE SYSTEM/RF SUBSYSTEM/SW/no-drone-data/nd_run_02",
+  "manifest": "../gargoyle/EDGE SYSTEM/RF SUBSYSTEM/SW/no-drone-data/nd_run_02/manifest.csv",
+  "manifest_clean": "/root/RFBinaryDetect/data/no_drone_features/nd_run_02/state/manifest_clean.csv",
+  "features_dir": "/root/RFBinaryDetect/data/no_drone_features/nd_run_02",
+  "staging_dir": "/root/RFBinaryDetect/data/staging/nd_run_02",
+  "batch_size": 20,
+  "workers": 4,
+  "run_id": "nd_run_02",
+  "prefix": "nd_run_02",
+  "pending_batches": 9,
+  "completed_capture_ids_total": 180,
+  "completed_capture_ids_this_run": 180,
+  "failed_batches_this_run": 0,
+  "failed_batches_total": 0,
+  "copied_bytes_this_run": 150994944000,
+  "reclaimed_bytes_this_run": 150994944000,
+  "elapsed_seconds": 3899.9026367664337,
+  "source_immutable_verified": true
+}
