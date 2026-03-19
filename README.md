@@ -7,8 +7,10 @@ Standalone binary drone/no-drone pipeline built from ideas in `RFClassification`
 - `rfbd extract`
 - `rfbd process-no-drone-batches`
 - `rfbd dataset build`
-- `rfbd train vgg-binary`
+- `rfbd train binary --arch <arch>`
+- `rfbd train vgg-binary` (compat alias to `--arch vgg16`)
 - `rfbd eval`
+- `rfbd export`
 
 ## Data contracts
 
@@ -33,9 +35,45 @@ pip install -e .
 
 rfbd extract --adapter custom-iq --manifest /path/manifest.csv --out-dir /tmp/custom_shards
 rfbd dataset build --custom-shards-dir /tmp/custom_shards --out-dir /tmp/dataset
-rfbd train vgg-binary --dataset-dir /tmp/dataset --out-dir /tmp/models
-rfbd eval --dataset-dir /tmp/dataset --out-dir /tmp/eval
+rfbd train binary --dataset-dir /tmp/dataset --out-dir /tmp/models --arch mobilenet_v3_small --model-name mobilenet.pt
+rfbd eval --dataset-dir /tmp/dataset --out-dir /tmp/eval --arch mobilenet_v3_small
+rfbd export --checkpoint /tmp/models/mobilenet.pt --out-dir /tmp/export --format torchscript --format onnx
 ```
+
+Supported architectures:
+
+- `vgg16`
+- `resnet18`
+- `mobilenet_v3_small`
+- `shufflenet_v2_x1_0`
+
+Checkpoint metadata now includes:
+
+- `arch`
+- `threshold`
+- `config`
+- `preprocessing_contract`
+- `label_contract`
+
+## Model Selection Workflow
+
+Baseline lock (current VGG behavior + runtime metrics):
+
+```bash
+./scripts/run_baseline_lock.sh
+```
+
+Candidate suite (train/eval/export/benchmark for all architectures + leaderboard + strict-FAR reruns):
+
+```bash
+./scripts/train_candidate_suite.sh
+```
+
+Key outputs:
+
+- `data/experiments/g2_edge_suite/leaderboard/leaderboard.json`
+- `data/experiments/g2_edge_suite/leaderboard/leaderboard.csv`
+- `data/experiments/g2_edge_suite/leaderboard/strict_far_report.json`
 
 ## Host GPU Run (No-Reboot Recovery + RAM-Safe Dataset)
 
@@ -57,6 +95,6 @@ The script will:
 Manual fail-fast flags are also available:
 
 ```bash
-rfbd train vgg-binary ... --require-gpu
+rfbd train binary ... --require-gpu
 rfbd eval ... --require-gpu
 ```

@@ -5,20 +5,23 @@ from __future__ import annotations
 import argparse
 from dataclasses import asdict
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 
 import numpy as np
 import torch
 
 from .io import save_json
 from .metrics import summarize_binary
+from .modeling import list_supported_arches
 from .training import (
     TrainConfig,
+    label_contract,
     load_dataset_arrays,
     predict_proba,
+    preprocessing_contract,
     resolve_device,
     stratified_val_split,
-    train_vgg_binary,
+    train_binary,
 )
 
 
@@ -73,7 +76,9 @@ def _validate_split(train: Dict[str, np.ndarray], test: Dict[str, np.ndarray], s
 
 
 def run_eval(args: argparse.Namespace) -> None:
+    arch = getattr(args, "arch", "vgg16")
     cfg = TrainConfig(
+        arch=arch,
         batch_size=args.batch_size,
         epochs=args.epochs,
         learning_rate=args.learning_rate,
@@ -91,15 +96,12 @@ def run_eval(args: argparse.Namespace) -> None:
 
     splits = []
 
-    # Domain holdout: dronedetect
     if np.any(data["source_domain"] == "dronedetect"):
         splits.append(("holdout_dronedetect",) + _train_test_by_domain(data, "dronedetect"))
 
-    # Domain holdout: dronerf
     if np.any(data["source_domain"] == "dronerf"):
         splits.append(("holdout_dronerf",) + _train_test_by_domain(data, "dronerf"))
 
-    # Session holdout in custom domain
     if np.any(data["source_domain"] == args.custom_domain):
         splits.append(
             (
@@ -118,8 +120,11 @@ def run_eval(args: argparse.Namespace) -> None:
 
     report = {
         "dataset_dir": args.dataset_dir,
+        "arch": cfg.arch,
         "splits": {},
         "config": asdict(cfg),
+        "preprocessing_contract": preprocessing_contract(),
+        "label_contract": label_contract(),
     }
 
     for split_name, train_data, test_data in splits:
@@ -132,21 +137,24 @@ def run_eval(args: argparse.Namespace) -> None:
         X_train, y_train = X_train_all[tr_idx], y_train_all[tr_idx]
         X_val, y_val = X_train_all[val_idx], y_train_all[val_idx]
 
-        model, threshold, val_metrics = train_vgg_binary(X_train, y_train, X_val, y_val, cfg, device=device)
+        model, threshold, val_metrics = train_binary(X_train, y_train, X_val, y_val, cfg, device=device)
 
         X_test = test_data["feat"].astype(np.float32)
         y_test = test_data["y"].astype(np.int64)
         prob_test = predict_proba(model, X_test, batch_size=max(cfg.batch_size, 128), device=device)
         test_summary = summarize_binary(y_test, prob_test, threshold)
 
-        ckpt_path = out_dir / f"vgg_binary_{split_name}.pt"
+        ckpt_path = out_dir / f"{cfg.arch}_binary_{split_name}.pt"
         torch.save(
             {
+                "arch": cfg.arch,
                 "state_dict": model.state_dict(),
                 "threshold": float(threshold),
                 "split": split_name,
                 "config": asdict(cfg),
                 "val_metrics": val_metrics,
+                "preprocessing_contract": preprocessing_contract(),
+                "label_contract": label_contract(),
             },
             ckpt_path,
         )
@@ -168,7 +176,7 @@ def run_eval(args: argparse.Namespace) -> None:
         }
 
         print(
-            f"[{split_name}] roc_auc={test_summary.roc_auc:.4f} "
+            f"[{cfg.arch}:{split_name}] roc_auc={test_summary.roc_auc:.4f} "
             f"pr_auc={test_summary.pr_auc:.4f} f1={test_summary.f1:.4f} far={test_summary.far:.4f}"
         )
 
@@ -180,6 +188,7 @@ def add_eval_subparser(subparsers: argparse._SubParsersAction) -> None:
     p = subparsers.add_parser("eval", help="Domain-held-out evaluation")
     p.add_argument("--dataset-dir", type=str, required=True)
     p.add_argument("--out-dir", type=str, required=True)
+    p.add_argument("--arch", type=str, default="vgg16", choices=list_supported_arches())
 
     p.add_argument("--custom-domain", type=str, default="custom_bg")
     p.add_argument("--custom-session-fraction", type=float, default=0.2)

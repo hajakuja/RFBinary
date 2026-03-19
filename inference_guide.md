@@ -1,6 +1,6 @@
 # Inference Guide: `RFBinaryDetect` Binary Drone Detector
 
-This guide explains exactly how to run inference with the trained VGG binary model in another environment, including RF capture settings, sample counts, preprocessing, model loading, and output interpretation.
+This guide explains exactly how to run inference with trained `rfbd` binary models in another environment, including RF capture settings, sample counts, preprocessing, model loading, and output interpretation.
 
 ## 1. Label and Output Contract
 
@@ -16,13 +16,13 @@ At inference time you should produce, per segment:
 - `pred_id` (`0` or `1`) using model threshold
 - `pred_label` (`"no_drone"` or `"drone"`)
 
-## 2. What the Current Model Was Trained On
+## 2. Baseline Model and Multi-Arch Compatibility
 
 Model artifact:
 - Checkpoint: `/root/RFBinaryDetect/data/models/binary_all_v1/vgg_binary_all_v1.pt`
 - Summary: `/root/RFBinaryDetect/data/models/binary_all_v1/vgg_binary_all_v1_summary.json`
 
-Training config stored in checkpoint:
+Baseline training config stored in checkpoint:
 - `batch_size=64`
 - `epochs=8`
 - `learning_rate=3e-4`
@@ -32,8 +32,14 @@ Training config stored in checkpoint:
 - `target_far=0.05`
 - `seed=13`
 
-Learned decision threshold in this checkpoint:
+Baseline learned decision threshold:
 - `threshold = 0.79`
+
+Current compatibility and architecture notes:
+
+- New checkpoints include `arch` and can be loaded with `rfbd.modeling.create_binary_model(...)`.
+- Supported architectures: `vgg16`, `resnet18`, `mobilenet_v3_small`, `shufflenet_v2_x1_0`.
+- Legacy `rfbd train vgg-binary` behavior is preserved; it is a compatibility alias for `rfbd train binary --arch vgg16`.
 
 Merged dataset summary used for this model:
 - total samples: `34,043`
@@ -127,14 +133,14 @@ Do not add extra normalization/transforms after this unless you retrain.
 
 ## 6. Model Input and Architecture Expectations
 
-Model class: `rfbd.modeling.VGG16Binary`
+Model builder: `rfbd.modeling.create_binary_model`
 
 Input shapes accepted:
 - `(B,H,W)` or `(B,1,H,W)` or `(B,3,H,W)`
 
 Internal behavior:
-- if channel count is `1`, model repeats to `3` channels before VGG16.
-- final classifier head has `2` outputs (`no_drone`, `drone`).
+- if channel count is `1`, model repeats to `3` channels before backbone inference.
+- final classifier head always has `2` outputs (`no_drone`, `drone`).
 
 ## 7. Loading the Model and Running Inference
 
@@ -154,7 +160,7 @@ pip install -e .
 from pathlib import Path
 import numpy as np
 import torch
-from rfbd.modeling import VGG16Binary
+from rfbd.modeling import create_binary_model
 from rfbd.labels import ID_TO_LABEL
 from rfbd.features import load_custom_iq, split_segments_1d, samples_per_segment, compute_spec_feature
 from rfbd.contracts import FeatureConfig
@@ -178,8 +184,9 @@ IQ_PATH = Path("/path/to/new_capture.s16")
 # ---- Load checkpoint ----
 ckpt = torch.load(CKPT_PATH, map_location="cpu")
 threshold = float(ckpt["threshold"])  # e.g. 0.79
+arch = str(ckpt.get("arch", "vgg16"))
 
-model = VGG16Binary(pretrained=False, freeze_features=False)
+model = create_binary_model(arch=arch, pretrained=False, freeze_features=False)
 model.load_state_dict(ckpt["state_dict"])
 model.eval()
 
@@ -210,6 +217,7 @@ pred_labels = [ID_TO_LABEL[int(v)] for v in pred_ids]
 
 # Segment-level outputs
 print("segments:", len(probs))
+print("arch:", arch)
 print("threshold:", threshold)
 print("mean_p_drone:", float(np.mean(probs)))
 print("drone_segment_ratio:", float(np.mean(pred_ids)))
@@ -244,6 +252,7 @@ Before trusting field predictions, verify:
 - same preprocessing switches (`log_power=True`, `normalize=True`)
 - input format decoded correctly as IQ interleaved int16 (if `.s16/.bin`)
 - no clipping at SDR front-end
+- architecture loaded from checkpoint (or explicitly passed if missing)
 - threshold loaded from checkpoint and applied
 
 ## 10. Common Failure Modes

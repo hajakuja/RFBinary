@@ -1,5 +1,6 @@
 import argparse
 from pathlib import Path
+import torch
 
 import numpy as np
 
@@ -76,7 +77,8 @@ def test_end_to_end_smoke(tmp_path: Path):
         argparse.Namespace(
             dataset_dir=str(merged),
             out_dir=str(models),
-            model_name="vgg_binary.pt",
+            model_name="mobilenet_smoke.pt",
+            arch="mobilenet_v3_small",
             exclude_domain=[],
             batch_size=4,
             epochs=0,
@@ -89,13 +91,20 @@ def test_end_to_end_smoke(tmp_path: Path):
             unfreeze_features=False,
         )
     )
-    assert (models / "vgg_binary.pt").exists()
+    ckpt_path = models / "mobilenet_smoke.pt"
+    assert ckpt_path.exists()
+
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=True)
+    assert ckpt["arch"] == "mobilenet_v3_small"
+    assert "preprocessing_contract" in ckpt
+    assert "label_contract" in ckpt
 
     eval_dir = tmp_path / "eval"
     run_eval(
         argparse.Namespace(
             dataset_dir=str(merged),
             out_dir=str(eval_dir),
+            arch="mobilenet_v3_small",
             custom_domain="custom_bg",
             custom_session_fraction=0.5,
             batch_size=4,

@@ -1,4 +1,4 @@
-"""Training and prediction utilities for binary VGG pipeline."""
+"""Training and prediction utilities for binary classification models."""
 
 from __future__ import annotations
 
@@ -13,13 +13,16 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset, WeightedRandomSampler
 from tqdm import tqdm
 
+from .contracts import FeatureConfig
 from .io import iter_npz_files, load_npz_shard, save_json
+from .labels import ID_TO_LABEL
 from .metrics import summarize_binary, tune_threshold
-from .modeling import VGG16Binary
+from .modeling import create_binary_model, list_supported_arches
 
 
 @dataclass
 class TrainConfig:
+    arch: str = "vgg16"
     batch_size: int = 64
     epochs: int = 5
     learning_rate: float = 3e-4
@@ -28,6 +31,14 @@ class TrainConfig:
     freeze_features: bool = True
     target_far: float = 0.05
     seed: int = 13
+
+
+def preprocessing_contract() -> Dict[str, object]:
+    return asdict(FeatureConfig())
+
+
+def label_contract() -> Dict[str, str]:
+    return {str(int(k)): str(v) for k, v in ID_TO_LABEL.items()}
 
 
 def load_dataset_arrays(dataset_dir: str | Path) -> Dict[str, np.ndarray]:
@@ -66,6 +77,7 @@ def stratified_val_split(y: np.ndarray, val_fraction: float, seed: int = 13) -> 
 
 
 def _to_loader(X: np.ndarray, y: np.ndarray, batch_size: int, train: bool, seed: int) -> DataLoader:
+    _ = seed
     x_t = torch.from_numpy(X.astype(np.float32))
     y_t = torch.from_numpy(y.astype(np.int64))
     ds = TensorDataset(x_t, y_t)
@@ -117,7 +129,7 @@ def predict_proba(model: nn.Module, X: np.ndarray, batch_size: int = 256, device
     return np.concatenate(probs, axis=0) if probs else np.empty((0,), dtype=np.float32)
 
 
-def train_vgg_binary(
+def train_binary(
     X_train: np.ndarray,
     y_train: np.ndarray,
     X_val: np.ndarray,
@@ -127,7 +139,12 @@ def train_vgg_binary(
 ) -> Tuple[nn.Module, float, Dict[str, float]]:
     if device is None:
         device = resolve_device(require_gpu=False)
-    model = VGG16Binary(pretrained=cfg.pretrained, freeze_features=cfg.freeze_features).to(device)
+
+    model = create_binary_model(
+        arch=cfg.arch,
+        pretrained=cfg.pretrained,
+        freeze_features=cfg.freeze_features,
+    ).to(device)
 
     cls, cnt = np.unique(y_train, return_counts=True)
     class_weight = np.ones((2,), dtype=np.float32)
@@ -166,6 +183,18 @@ def train_vgg_binary(
     }
 
 
+def train_vgg_binary(
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    X_val: np.ndarray,
+    y_val: np.ndarray,
+    cfg: TrainConfig,
+    device: torch.device | None = None,
+) -> Tuple[nn.Module, float, Dict[str, float]]:
+    cfg_vgg = TrainConfig(**{**asdict(cfg), "arch": "vgg16"})
+    return train_binary(X_train, y_train, X_val, y_val, cfg_vgg, device=device)
+
+
 def _filter_domains(data: Dict[str, np.ndarray], exclude_domains: List[str]) -> Dict[str, np.ndarray]:
     if not exclude_domains:
         return data
@@ -174,8 +203,9 @@ def _filter_domains(data: Dict[str, np.ndarray], exclude_domains: List[str]) -> 
     return {k: v[mask] for k, v in data.items()}
 
 
-def run_train(args: argparse.Namespace) -> None:
-    cfg = TrainConfig(
+def _build_cfg(args: argparse.Namespace, arch: str) -> TrainConfig:
+    return TrainConfig(
+        arch=arch,
         batch_size=args.batch_size,
         epochs=args.epochs,
         learning_rate=args.learning_rate,
@@ -185,6 +215,10 @@ def run_train(args: argparse.Namespace) -> None:
         target_far=args.target_far,
         seed=args.seed,
     )
+
+
+def _run_train_impl(args: argparse.Namespace, arch: str) -> None:
+    cfg = _build_cfg(args=args, arch=arch)
     device = resolve_device(require_gpu=bool(getattr(args, "require_gpu", False)))
 
     data = load_dataset_arrays(args.dataset_dir)
@@ -196,46 +230,53 @@ def run_train(args: argparse.Namespace) -> None:
         raise ValueError("Training set must contain both labels (0 and 1)")
 
     train_idx, val_idx = stratified_val_split(y, val_fraction=args.val_fraction, seed=args.seed)
-
     X_train, y_train = X[train_idx], y[train_idx]
     X_val, y_val = X[val_idx], y[val_idx]
 
-    model, threshold, val_metrics = train_vgg_binary(X_train, y_train, X_val, y_val, cfg, device=device)
+    model, threshold, val_metrics = train_binary(X_train, y_train, X_val, y_val, cfg, device=device)
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-
     ckpt_path = out_dir / args.model_name
-    torch.save(
-        {
-            "state_dict": model.state_dict(),
-            "threshold": float(threshold),
-            "config": asdict(cfg),
-            "val_metrics": val_metrics,
-        },
-        ckpt_path,
-    )
+
+    payload = {
+        "arch": cfg.arch,
+        "state_dict": model.state_dict(),
+        "threshold": float(threshold),
+        "config": asdict(cfg),
+        "val_metrics": val_metrics,
+        "preprocessing_contract": preprocessing_contract(),
+        "label_contract": label_contract(),
+    }
+    torch.save(payload, ckpt_path)
 
     save_json(
         out_dir / f"{Path(args.model_name).stem}_summary.json",
         {
+            "arch": cfg.arch,
             "threshold": float(threshold),
             "val_metrics": val_metrics,
             "train_size": int(len(train_idx)),
             "val_size": int(len(val_idx)),
+            "preprocessing_contract": preprocessing_contract(),
         },
     )
     print(f"Saved model checkpoint to {ckpt_path}")
 
 
-def add_train_subparser(subparsers: argparse._SubParsersAction) -> None:
-    p_train = subparsers.add_parser("train", help="Model training commands")
-    train_sub = p_train.add_subparsers(dest="train_cmd", required=True)
+def run_train(args: argparse.Namespace) -> None:
+    arch = getattr(args, "arch", "vgg16")
+    _run_train_impl(args=args, arch=arch)
 
-    p = train_sub.add_parser("vgg-binary", help="Train VGG16 binary classifier")
+
+def run_train_vgg_alias(args: argparse.Namespace) -> None:
+    _run_train_impl(args=args, arch="vgg16")
+
+
+def _add_shared_train_args(p: argparse.ArgumentParser, default_model_name: str) -> None:
     p.add_argument("--dataset-dir", type=str, required=True)
     p.add_argument("--out-dir", type=str, required=True)
-    p.add_argument("--model-name", type=str, default="vgg_binary.pt")
+    p.add_argument("--model-name", type=str, default=default_model_name)
     p.add_argument("--exclude-domain", action="append", default=[])
 
     p.add_argument("--batch-size", type=int, default=64)
@@ -255,4 +296,17 @@ def add_train_subparser(subparsers: argparse._SubParsersAction) -> None:
         help="Fail fast if CUDA GPU is unavailable.",
     )
 
-    p.set_defaults(func=run_train)
+
+def add_train_subparser(subparsers: argparse._SubParsersAction) -> None:
+    p_train = subparsers.add_parser("train", help="Model training commands")
+    train_sub = p_train.add_subparsers(dest="train_cmd", required=True)
+
+    p_binary = train_sub.add_parser("binary", help="Train binary classifier with selectable architecture")
+    _add_shared_train_args(p_binary, default_model_name="binary_model.pt")
+    p_binary.add_argument("--arch", type=str, default="vgg16", choices=list_supported_arches())
+    p_binary.set_defaults(func=run_train)
+
+    # Backward-compatible alias.
+    p_vgg = train_sub.add_parser("vgg-binary", help="Train VGG16 binary classifier (compat alias)")
+    _add_shared_train_args(p_vgg, default_model_name="vgg_binary.pt")
+    p_vgg.set_defaults(func=run_train_vgg_alias)
