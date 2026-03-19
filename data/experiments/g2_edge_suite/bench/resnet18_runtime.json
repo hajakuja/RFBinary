@@ -1,0 +1,35 @@
+{
+  "checkpoint": "/root/RFBinaryDetect/data/experiments/g2_edge_suite/models/resnet18/resnet18_binary.pt",
+  "arch": "resnet18",
+  "input_shape": [
+    1,
+    1,
+    224,
+    224
+  ],
+  "iterations": 120,
+  "warmup": 20,
+  "load_workers": 2,
+  "rows": [
+    {
+      "runtime": "pytorch",
+      "load_state": "unloaded",
+      "samples": 120,
+      "batch_size": 1,
+      "latency_ms_mean": 20.800883391833242,
+      "latency_ms_p50": 20.570774999214336,
+      "latency_ms_p95": 21.313969651964726,
+      "throughput_fps": 48.074881300119
+    },
+    {
+      "runtime": "pytorch",
+      "load_state": "loaded",
+      "samples": 120,
+      "batch_size": 1,
+      "latency_ms_mean": 129.04802964991782,
+      "latency_ms_p50": 67.1812830005365,
+      "latency_ms_p95": 484.01406295015477,
+      "throughput_fps": 7.749052834923596
+    }
+  ]
+}

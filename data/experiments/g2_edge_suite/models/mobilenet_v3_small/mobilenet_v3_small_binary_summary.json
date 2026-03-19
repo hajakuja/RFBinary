@@ -1,0 +1,21 @@
+{
+  "arch": "mobilenet_v3_small",
+  "threshold": 0.86,
+  "val_metrics": {
+    "val_roc_auc": 0.9860641467264692,
+    "val_pr_auc": 0.9919256543100059,
+    "val_f1": 0.12857142857130816,
+    "val_far": 0.0
+  },
+  "train_size": 30639,
+  "val_size": 3404,
+  "preprocessing_contract": {
+    "segment_ms": 20,
+    "nfft": 1024,
+    "noverlap": 120,
+    "resize_h": 224,
+    "resize_w": 224,
+    "log_power": true,
+    "normalize": true
+  }
+}

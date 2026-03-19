@@ -1,0 +1,105 @@
+{
+  "dataset_dir": "/root/RFBinaryDetect/data/datasets/binary_all_v1",
+  "arch": "mobilenet_v3_small",
+  "splits": {
+    "holdout_dronedetect": {
+      "checkpoint": "/root/RFBinaryDetect/data/experiments/g2_edge_suite/eval/mobilenet_v3_small/mobilenet_v3_small_binary_holdout_dronedetect.pt",
+      "threshold": 0.99,
+      "val_metrics": {
+        "val_roc_auc": 0.9761015896671599,
+        "val_pr_auc": 0.943928294736907,
+        "val_f1": 0.6075949367084358,
+        "val_far": 0.0
+      },
+      "test_metrics": {
+        "roc_auc": NaN,
+        "pr_auc": NaN,
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "far": 0.0,
+        "confusion_matrix": {
+          "tp": 0,
+          "tn": 0,
+          "fp": 0,
+          "fn": 20487
+        },
+        "test_size": 20487
+      }
+    },
+    "holdout_dronerf": {
+      "checkpoint": "/root/RFBinaryDetect/data/experiments/g2_edge_suite/eval/mobilenet_v3_small/mobilenet_v3_small_binary_holdout_dronerf.pt",
+      "threshold": 0.01,
+      "val_metrics": {
+        "val_roc_auc": 0.9993915850431208,
+        "val_pr_auc": 0.9996873341128966,
+        "val_f1": 0.9999999999994995,
+        "val_far": 0.0
+      },
+      "test_metrics": {
+        "roc_auc": 0.31449711909627565,
+        "pr_auc": 0.7744254789856839,
+        "f1": 0.8284372611112182,
+        "precision": 0.7980223017041866,
+        "recall": 0.8612624886466846,
+        "far": 0.9999999999999989,
+        "confusion_matrix": {
+          "tp": 3793,
+          "tn": 0,
+          "fp": 960,
+          "fn": 611
+        },
+        "test_size": 5364
+      }
+    },
+    "holdout_custom_bg_sessions": {
+      "checkpoint": "/root/RFBinaryDetect/data/experiments/g2_edge_suite/eval/mobilenet_v3_small/mobilenet_v3_small_binary_holdout_custom_bg_sessions.pt",
+      "threshold": 0.44,
+      "val_metrics": {
+        "val_roc_auc": 0.8687914323021201,
+        "val_pr_auc": 0.9914072826564756,
+        "val_f1": 0.11296436694454837,
+        "val_far": 0.0
+      },
+      "test_metrics": {
+        "roc_auc": NaN,
+        "pr_auc": NaN,
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "far": 0.4266357421874999,
+        "confusion_matrix": {
+          "tp": 0,
+          "tn": 4697,
+          "fp": 3495,
+          "fn": 0
+        },
+        "test_size": 8192
+      }
+    }
+  },
+  "config": {
+    "arch": "mobilenet_v3_small",
+    "batch_size": 64,
+    "epochs": 8,
+    "learning_rate": 0.0003,
+    "weight_decay": 0.0001,
+    "pretrained": true,
+    "freeze_features": true,
+    "target_far": 0.05,
+    "seed": 13
+  },
+  "preprocessing_contract": {
+    "segment_ms": 20,
+    "nfft": 1024,
+    "noverlap": 120,
+    "resize_h": 224,
+    "resize_w": 224,
+    "log_power": true,
+    "normalize": true
+  },
+  "label_contract": {
+    "0": "no_drone",
+    "1": "drone"
+  }
+}

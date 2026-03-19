@@ -1,0 +1,21 @@
+{
+  "arch": "vgg16",
+  "threshold": 0.77,
+  "val_metrics": {
+    "val_roc_auc": 0.9797361944468217,
+    "val_pr_auc": 0.9851607389014426,
+    "val_f1": 0.13418290854560183,
+    "val_far": 0.0
+  },
+  "train_size": 30639,
+  "val_size": 3404,
+  "preprocessing_contract": {
+    "segment_ms": 20,
+    "nfft": 1024,
+    "noverlap": 120,
+    "resize_h": 224,
+    "resize_w": 224,
+    "log_power": true,
+    "normalize": true
+  }
+}

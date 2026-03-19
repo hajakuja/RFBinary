@@ -1,0 +1,35 @@
+{
+  "checkpoint": "/root/RFBinaryDetect/data/experiments/g2_edge_suite/models/mobilenet_v3_small/mobilenet_v3_small_binary.pt",
+  "arch": "mobilenet_v3_small",
+  "input_shape": [
+    1,
+    1,
+    224,
+    224
+  ],
+  "iterations": 120,
+  "warmup": 20,
+  "load_workers": 2,
+  "rows": [
+    {
+      "runtime": "pytorch",
+      "load_state": "unloaded",
+      "samples": 120,
+      "batch_size": 1,
+      "latency_ms_mean": 5.5068559417729075,
+      "latency_ms_p50": 5.1526424977055285,
+      "latency_ms_p95": 6.48996059790079,
+      "throughput_fps": 181.5918212812472
+    },
+    {
+      "runtime": "pytorch",
+      "load_state": "loaded",
+      "samples": 120,
+      "batch_size": 1,
+      "latency_ms_mean": 25.382806891502696,
+      "latency_ms_p50": 16.69363099790644,
+      "latency_ms_p95": 37.11467955035899,
+      "throughput_fps": 39.39674616264627
+    }
+  ]
+}

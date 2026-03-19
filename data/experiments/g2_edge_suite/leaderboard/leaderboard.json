@@ -1,0 +1,364 @@
+{
+  "records": [
+    {
+      "arch": "mobilenet_v3_small",
+      "avg_far": 0.47554524739583287,
+      "avg_recall": 0.28708749621556157,
+      "loaded_runtime": "pytorch",
+      "loaded_p95_ms": 37.11467955035899,
+      "loaded_p50_ms": 16.69363099790644,
+      "loaded_throughput_fps": 39.39674616264627,
+      "splits": {
+        "holdout_dronedetect": {
+          "checkpoint": "/root/RFBinaryDetect/data/experiments/g2_edge_suite/eval/mobilenet_v3_small/mobilenet_v3_small_binary_holdout_dronedetect.pt",
+          "threshold": 0.99,
+          "val_metrics": {
+            "val_roc_auc": 0.9761015896671599,
+            "val_pr_auc": 0.943928294736907,
+            "val_f1": 0.6075949367084358,
+            "val_far": 0.0
+          },
+          "test_metrics": {
+            "roc_auc": NaN,
+            "pr_auc": NaN,
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0,
+            "far": 0.0,
+            "confusion_matrix": {
+              "tp": 0,
+              "tn": 0,
+              "fp": 0,
+              "fn": 20487
+            },
+            "test_size": 20487
+          }
+        },
+        "holdout_dronerf": {
+          "checkpoint": "/root/RFBinaryDetect/data/experiments/g2_edge_suite/eval/mobilenet_v3_small/mobilenet_v3_small_binary_holdout_dronerf.pt",
+          "threshold": 0.01,
+          "val_metrics": {
+            "val_roc_auc": 0.9993915850431208,
+            "val_pr_auc": 0.9996873341128966,
+            "val_f1": 0.9999999999994995,
+            "val_far": 0.0
+          },
+          "test_metrics": {
+            "roc_auc": 0.31449711909627565,
+            "pr_auc": 0.7744254789856839,
+            "f1": 0.8284372611112182,
+            "precision": 0.7980223017041866,
+            "recall": 0.8612624886466846,
+            "far": 0.9999999999999989,
+            "confusion_matrix": {
+              "tp": 3793,
+              "tn": 0,
+              "fp": 960,
+              "fn": 611
+            },
+            "test_size": 5364
+          }
+        },
+        "holdout_custom_bg_sessions": {
+          "checkpoint": "/root/RFBinaryDetect/data/experiments/g2_edge_suite/eval/mobilenet_v3_small/mobilenet_v3_small_binary_holdout_custom_bg_sessions.pt",
+          "threshold": 0.44,
+          "val_metrics": {
+            "val_roc_auc": 0.8687914323021201,
+            "val_pr_auc": 0.9914072826564756,
+            "val_f1": 0.11296436694454837,
+            "val_far": 0.0
+          },
+          "test_metrics": {
+            "roc_auc": NaN,
+            "pr_auc": NaN,
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0,
+            "far": 0.4266357421874999,
+            "confusion_matrix": {
+              "tp": 0,
+              "tn": 4697,
+              "fp": 3495,
+              "fn": 0
+            },
+            "test_size": 8192
+          }
+        }
+      },
+      "gate_far": true,
+      "gate_recall": false,
+      "gate_speed": true,
+      "gate_pass": false
+    },
+    {
+      "arch": "shufflenet_v2_x1_0",
+      "avg_far": 0.333333333333333,
+      "avg_recall": 0.3315924916742355,
+      "loaded_runtime": "pytorch",
+      "loaded_p95_ms": 187.49421360153065,
+      "loaded_p50_ms": 29.866034499718808,
+      "loaded_throughput_fps": 19.715125343439304,
+      "splits": {
+        "holdout_dronedetect": {
+          "checkpoint": "/root/RFBinaryDetect/data/experiments/g2_edge_suite/eval/shufflenet_v2_x1_0/shufflenet_v2_x1_0_binary_holdout_dronedetect.pt",
+          "threshold": 0.8400000000000001,
+          "val_metrics": {
+            "val_roc_auc": 0.9709115747640301,
+            "val_pr_auc": 0.9310375888276127,
+            "val_f1": 0.5919999999995813,
+            "val_far": 0.0
+          },
+          "test_metrics": {
+            "roc_auc": NaN,
+            "pr_auc": NaN,
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0,
+            "far": 0.0,
+            "confusion_matrix": {
+              "tp": 0,
+              "tn": 0,
+              "fp": 0,
+              "fn": 20487
+            },
+            "test_size": 20487
+          }
+        },
+        "holdout_dronerf": {
+          "checkpoint": "/root/RFBinaryDetect/data/experiments/g2_edge_suite/eval/shufflenet_v2_x1_0/shufflenet_v2_x1_0_binary_holdout_dronerf.pt",
+          "threshold": 0.11,
+          "val_metrics": {
+            "val_roc_auc": 0.9995676737990046,
+            "val_pr_auc": 0.9996871497641994,
+            "val_f1": 0.9999999999994995,
+            "val_far": 0.0
+          },
+          "test_metrics": {
+            "roc_auc": 0.27000371348016916,
+            "pr_auc": 0.7412374199539653,
+            "f1": 0.8991277578240299,
+            "precision": 0.82025837858079,
+            "recall": 0.9947774750227064,
+            "far": 0.9999999999999989,
+            "confusion_matrix": {
+              "tp": 4381,
+              "tn": 0,
+              "fp": 960,
+              "fn": 23
+            },
+            "test_size": 5364
+          }
+        },
+        "holdout_custom_bg_sessions": {
+          "checkpoint": "/root/RFBinaryDetect/data/experiments/g2_edge_suite/eval/shufflenet_v2_x1_0/shufflenet_v2_x1_0_binary_holdout_custom_bg_sessions.pt",
+          "threshold": 0.15000000000000002,
+          "val_metrics": {
+            "val_roc_auc": 0.600820694388637,
+            "val_pr_auc": 0.9536069880647464,
+            "val_f1": 0.004008016032059327,
+            "val_far": 0.010416666666666559
+          },
+          "test_metrics": {
+            "roc_auc": NaN,
+            "pr_auc": NaN,
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0,
+            "far": 0.0,
+            "confusion_matrix": {
+              "tp": 0,
+              "tn": 8192,
+              "fp": 0,
+              "fn": 0
+            },
+            "test_size": 8192
+          }
+        }
+      },
+      "gate_far": true,
+      "gate_recall": true,
+      "gate_speed": true,
+      "gate_pass": true
+    },
+    {
+      "arch": "resnet18",
+      "avg_far": 0.6666666666666662,
+      "avg_recall": 0.33799945886243976,
+      "loaded_runtime": "pytorch",
+      "loaded_p95_ms": 484.01406295015477,
+      "loaded_p50_ms": 67.1812830005365,
+      "loaded_throughput_fps": 7.749052834923596,
+      "splits": {
+        "holdout_dronedetect": {
+          "checkpoint": "/root/RFBinaryDetect/data/experiments/g2_edge_suite/eval/resnet18/resnet18_binary_holdout_dronedetect.pt",
+          "threshold": 0.97,
+          "val_metrics": {
+            "val_roc_auc": 0.9721311475409801,
+            "val_pr_auc": 0.934411852503302,
+            "val_f1": 0.7506561679785126,
+            "val_far": 0.03934426229508192
+          },
+          "test_metrics": {
+            "roc_auc": NaN,
+            "pr_auc": NaN,
+            "f1": 0.031137379270547404,
+            "precision": 0.9999999999999969,
+            "recall": 0.01581490701420413,
+            "far": 0.0,
+            "confusion_matrix": {
+              "tp": 324,
+              "tn": 0,
+              "fp": 0,
+              "fn": 20163
+            },
+            "test_size": 20487
+          }
+        },
+        "holdout_dronerf": {
+          "checkpoint": "/root/RFBinaryDetect/data/experiments/g2_edge_suite/eval/resnet18/resnet18_binary_holdout_dronerf.pt",
+          "threshold": 0.01,
+          "val_metrics": {
+            "val_roc_auc": 0.9993915850431208,
+            "val_pr_auc": 0.9982918496827645,
+            "val_f1": 0.9999999999994995,
+            "val_far": 0.0
+          },
+          "test_metrics": {
+            "roc_auc": 0.2893860694822884,
+            "pr_auc": 0.7510056870692308,
+            "f1": 0.9008196721306521,
+            "precision": 0.8207617625093352,
+            "recall": 0.9981834695731151,
+            "far": 0.9999999999999989,
+            "confusion_matrix": {
+              "tp": 4396,
+              "tn": 0,
+              "fp": 960,
+              "fn": 8
+            },
+            "test_size": 5364
+          }
+        },
+        "holdout_custom_bg_sessions": {
+          "checkpoint": "/root/RFBinaryDetect/data/experiments/g2_edge_suite/eval/resnet18/resnet18_binary_holdout_custom_bg_sessions.pt",
+          "threshold": 0.03,
+          "val_metrics": {
+            "val_roc_auc": 0.8136906555510828,
+            "val_pr_auc": 0.9846007619157353,
+            "val_f1": 0.1193804306761249,
+            "val_far": 0.0
+          },
+          "test_metrics": {
+            "roc_auc": NaN,
+            "pr_auc": NaN,
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0,
+            "far": 0.9999999999999998,
+            "confusion_matrix": {
+              "tp": 0,
+              "tn": 0,
+              "fp": 8192,
+              "fn": 0
+            },
+            "test_size": 8192
+          }
+        }
+      },
+      "gate_far": true,
+      "gate_recall": true,
+      "gate_speed": false,
+      "gate_pass": false
+    },
+    {
+      "arch": "vgg16",
+      "avg_far": 0.6666666666666662,
+      "avg_recall": 0.3328792007266121,
+      "loaded_runtime": "pytorch",
+      "loaded_p95_ms": 575.9984167503717,
+      "loaded_p50_ms": 559.3303919995378,
+      "loaded_throughput_fps": 1.81210136383781,
+      "splits": {
+        "holdout_dronedetect": {
+          "checkpoint": "/root/RFBinaryDetect/data/experiments/g2_edge_suite/eval/vgg16/vgg16_binary_holdout_dronedetect.pt",
+          "threshold": 0.9500000000000001,
+          "val_metrics": {
+            "val_roc_auc": 0.9768678589170359,
+            "val_pr_auc": 0.9081500384974436,
+            "val_f1": 0.5502471169682978,
+            "val_far": 0.0
+          },
+          "test_metrics": {
+            "roc_auc": NaN,
+            "pr_auc": NaN,
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0,
+            "far": 0.0,
+            "confusion_matrix": {
+              "tp": 0,
+              "tn": 0,
+              "fp": 0,
+              "fn": 20487
+            },
+            "test_size": 20487
+          }
+        },
+        "holdout_dronerf": {
+          "checkpoint": "/root/RFBinaryDetect/data/experiments/g2_edge_suite/eval/vgg16/vgg16_binary_holdout_dronerf.pt",
+          "threshold": 0.01,
+          "val_metrics": {
+            "val_roc_auc": 0.9999999999999982,
+            "val_pr_auc": 0.35721757322175707,
+            "val_f1": 0.9999999999994995,
+            "val_far": 0.0
+          },
+          "test_metrics": {
+            "roc_auc": 0.3375340599455036,
+            "pr_auc": 0.8532471084644602,
+            "f1": 0.9010448678544524,
+            "precision": 0.8208286674132137,
+            "recall": 0.9986376021798363,
+            "far": 0.9999999999999989,
+            "confusion_matrix": {
+              "tp": 4398,
+              "tn": 0,
+              "fp": 960,
+              "fn": 6
+            },
+            "test_size": 5364
+          }
+        },
+        "holdout_custom_bg_sessions": {
+          "checkpoint": "/root/RFBinaryDetect/data/experiments/g2_edge_suite/eval/vgg16/vgg16_binary_holdout_custom_bg_sessions.pt",
+          "threshold": 0.05,
+          "val_metrics": {
+            "val_roc_auc": 0.9138794027052266,
+            "val_pr_auc": 0.9800410042837725,
+            "val_f1": 0.1306796845661564,
+            "val_far": 0.0
+          },
+          "test_metrics": {
+            "roc_auc": NaN,
+            "pr_auc": NaN,
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0,
+            "far": 0.9999999999999998,
+            "confusion_matrix": {
+              "tp": 0,
+              "tn": 0,
+              "fp": 8192,
+              "fn": 0
+            },
+            "test_size": 8192
+          }
+        }
+      },
+      "gate_far": true,
+      "gate_recall": true,
+      "gate_speed": false,
+      "gate_pass": false
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "checkpoint": "/root/RFBinaryDetect/data/experiments/g2_edge_suite/models/vgg16/vgg16_binary.pt",
+  "arch": "vgg16",
+  "input_shape": [
+    1,
+    1,
+    224,
+    224
+  ],
+  "iterations": 120,
+  "warmup": 20,
+  "load_workers": 2,
+  "rows": [
+    {
+      "runtime": "pytorch",
+      "load_state": "unloaded",
+      "samples": 120,
+      "batch_size": 1,
+      "latency_ms_mean": 158.33555203286474,
+      "latency_ms_p50": 157.58068149807514,
+      "latency_ms_p95": 160.8558774485573,
+      "throughput_fps": 6.315700972782386
+    },
+    {
+      "runtime": "pytorch",
+      "load_state": "loaded",
+      "samples": 120,
+      "batch_size": 1,
+      "latency_ms_mean": 551.8455092832786,
+      "latency_ms_p50": 559.3303919995378,
+      "latency_ms_p95": 575.9984167503717,
+      "throughput_fps": 1.81210136383781
+    }
+  ]
+}

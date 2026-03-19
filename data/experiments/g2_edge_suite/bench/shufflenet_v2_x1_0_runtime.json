@@ -1,0 +1,35 @@
+{
+  "checkpoint": "/root/RFBinaryDetect/data/experiments/g2_edge_suite/models/shufflenet_v2_x1_0/shufflenet_v2_x1_0_binary.pt",
+  "arch": "shufflenet_v2_x1_0",
+  "input_shape": [
+    1,
+    1,
+    224,
+    224
+  ],
+  "iterations": 120,
+  "warmup": 20,
+  "load_workers": 2,
+  "rows": [
+    {
+      "runtime": "pytorch",
+      "load_state": "unloaded",
+      "samples": 120,
+      "batch_size": 1,
+      "latency_ms_mean": 9.800770041692886,
+      "latency_ms_p50": 9.727768498123623,
+      "latency_ms_p95": 10.23051149713865,
+      "throughput_fps": 102.0327990296638
+    },
+    {
+      "runtime": "pytorch",
+      "load_state": "loaded",
+      "samples": 120,
+      "batch_size": 1,
+      "latency_ms_mean": 50.7224774166995,
+      "latency_ms_p50": 29.866034499718808,
+      "latency_ms_p95": 187.49421360153065,
+      "throughput_fps": 19.715125343439304
+    }
+  ]
+}
