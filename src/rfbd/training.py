@@ -10,7 +10,7 @@ from typing import Dict, List, Tuple
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, TensorDataset, WeightedRandomSampler
+from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
 from tqdm import tqdm
 
 from .contracts import FeatureConfig
@@ -55,6 +55,33 @@ def load_dataset_arrays(dataset_dir: str | Path) -> Dict[str, np.ndarray]:
     return {k: np.concatenate(v, axis=0) for k, v in acc.items()}
 
 
+class IndexedArrayDataset(Dataset):
+    """Dataset wrapper that keeps one shared feature array and split indices."""
+
+    def __init__(
+        self,
+        X: np.ndarray,
+        y: np.ndarray | None = None,
+        indices: np.ndarray | None = None,
+    ) -> None:
+        self.X = np.asarray(X, dtype=np.float32)
+        self.y = None if y is None else np.asarray(y, dtype=np.int64)
+        if indices is None:
+            self.indices = np.arange(len(self.X), dtype=np.int64)
+        else:
+            self.indices = np.asarray(indices, dtype=np.int64)
+
+    def __len__(self) -> int:
+        return int(len(self.indices))
+
+    def __getitem__(self, item: int):
+        idx = int(self.indices[item])
+        x = torch.from_numpy(self.X[idx])
+        if self.y is None:
+            return x
+        return x, int(self.y[idx])
+
+
 def stratified_val_split(y: np.ndarray, val_fraction: float, seed: int = 13) -> Tuple[np.ndarray, np.ndarray]:
     if not 0 < val_fraction < 1:
         raise ValueError("val_fraction must be in (0,1)")
@@ -76,16 +103,24 @@ def stratified_val_split(y: np.ndarray, val_fraction: float, seed: int = 13) -> 
     return train_idx, val_idx
 
 
-def _to_loader(X: np.ndarray, y: np.ndarray, batch_size: int, train: bool, seed: int) -> DataLoader:
+def _to_loader(
+    X: np.ndarray,
+    y: np.ndarray | None,
+    batch_size: int,
+    train: bool,
+    seed: int,
+    indices: np.ndarray | None = None,
+) -> DataLoader:
     _ = seed
-    x_t = torch.from_numpy(X.astype(np.float32))
-    y_t = torch.from_numpy(y.astype(np.int64))
-    ds = TensorDataset(x_t, y_t)
+    ds = IndexedArrayDataset(X=X, y=y, indices=indices)
 
     if train:
-        cls, cnt = np.unique(y, return_counts=True)
+        if ds.y is None:
+            raise ValueError("Training loader requires labels")
+        subset_y = ds.y[ds.indices]
+        cls, cnt = np.unique(subset_y, return_counts=True)
         weights = {int(c): 1.0 / float(n) for c, n in zip(cls, cnt)}
-        sample_w = np.array([weights[int(v)] for v in y], dtype=np.float64)
+        sample_w = np.array([weights[int(v)] for v in subset_y], dtype=np.float64)
         sampler = WeightedRandomSampler(sample_w, num_samples=len(sample_w), replacement=True)
         return DataLoader(ds, batch_size=batch_size, sampler=sampler)
 
@@ -111,16 +146,22 @@ def resolve_device(require_gpu: bool = False) -> torch.device:
     return torch.device("cpu")
 
 
-def predict_proba(model: nn.Module, X: np.ndarray, batch_size: int = 256, device: torch.device | None = None) -> np.ndarray:
+def predict_proba(
+    model: nn.Module,
+    X: np.ndarray,
+    batch_size: int = 256,
+    device: torch.device | None = None,
+    indices: np.ndarray | None = None,
+) -> np.ndarray:
     if device is None:
         device = resolve_device(require_gpu=False)
 
-    loader = _to_loader(X, np.zeros((len(X),), dtype=np.int64), batch_size=batch_size, train=False, seed=0)
+    loader = _to_loader(X, y=None, batch_size=batch_size, train=False, seed=0, indices=indices)
     model.eval()
     probs = []
 
     with torch.no_grad():
-        for xb, _ in loader:
+        for xb in loader:
             xb = xb.to(device)
             logits = model(xb)
             p1 = torch.softmax(logits, dim=1)[:, 1]
@@ -129,22 +170,30 @@ def predict_proba(model: nn.Module, X: np.ndarray, batch_size: int = 256, device
     return np.concatenate(probs, axis=0) if probs else np.empty((0,), dtype=np.float32)
 
 
-def train_binary(
-    X_train: np.ndarray,
-    y_train: np.ndarray,
-    X_val: np.ndarray,
-    y_val: np.ndarray,
+def train_binary_indexed(
+    X: np.ndarray,
+    y: np.ndarray,
+    train_idx: np.ndarray,
+    val_idx: np.ndarray,
     cfg: TrainConfig,
     device: torch.device | None = None,
 ) -> Tuple[nn.Module, float, Dict[str, float]]:
     if device is None:
         device = resolve_device(require_gpu=False)
 
+    X = np.asarray(X, dtype=np.float32)
+    y = np.asarray(y, dtype=np.int64)
+    train_idx = np.asarray(train_idx, dtype=np.int64)
+    val_idx = np.asarray(val_idx, dtype=np.int64)
+
     model = create_binary_model(
         arch=cfg.arch,
         pretrained=cfg.pretrained,
         freeze_features=cfg.freeze_features,
     ).to(device)
+
+    y_train = y[train_idx]
+    y_val = y[val_idx]
 
     cls, cnt = np.unique(y_train, return_counts=True)
     class_weight = np.ones((2,), dtype=np.float32)
@@ -154,7 +203,14 @@ def train_binary(
     criterion = nn.CrossEntropyLoss(weight=torch.tensor(class_weight, device=device))
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
 
-    train_loader = _to_loader(X_train, y_train, batch_size=cfg.batch_size, train=True, seed=cfg.seed)
+    train_loader = _to_loader(
+        X,
+        y=y,
+        batch_size=cfg.batch_size,
+        train=True,
+        seed=cfg.seed,
+        indices=train_idx,
+    )
 
     for epoch in range(cfg.epochs):
         model.train()
@@ -172,7 +228,13 @@ def train_binary(
         if losses:
             print(f"epoch {epoch+1}: train loss={np.mean(losses):.4f}")
 
-    val_prob = predict_proba(model, X_val, batch_size=max(cfg.batch_size, 128), device=device)
+    val_prob = predict_proba(
+        model,
+        X,
+        batch_size=max(cfg.batch_size, 128),
+        device=device,
+        indices=val_idx,
+    )
     threshold = tune_threshold(y_val, val_prob, target_far=cfg.target_far)
     val_summary = summarize_binary(y_val, val_prob, threshold)
     return model, threshold, {
@@ -181,6 +243,26 @@ def train_binary(
         "val_f1": float(val_summary.f1),
         "val_far": float(val_summary.far),
     }
+
+
+def train_binary(
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    X_val: np.ndarray,
+    y_val: np.ndarray,
+    cfg: TrainConfig,
+    device: torch.device | None = None,
+) -> Tuple[nn.Module, float, Dict[str, float]]:
+    X_train = np.asarray(X_train, dtype=np.float32)
+    X_val = np.asarray(X_val, dtype=np.float32)
+    y_train = np.asarray(y_train, dtype=np.int64)
+    y_val = np.asarray(y_val, dtype=np.int64)
+
+    X = np.concatenate([X_train, X_val], axis=0)
+    y = np.concatenate([y_train, y_val], axis=0)
+    train_idx = np.arange(len(y_train), dtype=np.int64)
+    val_idx = np.arange(len(y_train), len(y), dtype=np.int64)
+    return train_binary_indexed(X, y, train_idx, val_idx, cfg, device=device)
 
 
 def train_vgg_binary(
@@ -224,16 +306,13 @@ def _run_train_impl(args: argparse.Namespace, arch: str) -> None:
     data = load_dataset_arrays(args.dataset_dir)
     data = _filter_domains(data, args.exclude_domain or [])
 
-    X = data["feat"].astype(np.float32)
-    y = data["y"].astype(np.int64)
+    X = np.asarray(data["feat"], dtype=np.float32)
+    y = np.asarray(data["y"], dtype=np.int64)
     if len(np.unique(y)) < 2:
         raise ValueError("Training set must contain both labels (0 and 1)")
 
     train_idx, val_idx = stratified_val_split(y, val_fraction=args.val_fraction, seed=args.seed)
-    X_train, y_train = X[train_idx], y[train_idx]
-    X_val, y_val = X[val_idx], y[val_idx]
-
-    model, threshold, val_metrics = train_binary(X_train, y_train, X_val, y_val, cfg, device=device)
+    model, threshold, val_metrics = train_binary_indexed(X, y, train_idx, val_idx, cfg, device=device)
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

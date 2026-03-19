@@ -30,6 +30,7 @@ STRICT_TARGET_FAR="${STRICT_TARGET_FAR:-0.03}"
 BENCH_ITERS="${BENCH_ITERS:-120}"
 BENCH_WARMUP="${BENCH_WARMUP:-20}"
 REQUIRE_GPU="${REQUIRE_GPU:-0}"
+SKIP_EXISTING="${SKIP_EXISTING:-1}"
 
 mkdir -p "${MODEL_ROOT}" "${EVAL_ROOT}" "${EXPORT_ROOT}" "${BENCH_ROOT}" "${LEADERBOARD_ROOT}" "${STRICT_ROOT}"
 
@@ -47,40 +48,56 @@ for arch in "${ARCHES[@]}"; do
   arch_model_dir="${MODEL_ROOT}/${arch}"
   arch_eval_dir="${EVAL_ROOT}/${arch}"
   arch_export_dir="${EXPORT_ROOT}/${arch}"
+  model_ckpt="${arch_model_dir}/${arch}_binary.pt"
+  eval_report="${arch_eval_dir}/domain_holdout_report.json"
+  export_summary="${arch_export_dir}/${arch}_binary_${arch}_export_summary.json"
+  bench_json="${BENCH_ROOT}/${arch}_runtime.json"
   mkdir -p "${arch_model_dir}" "${arch_eval_dir}" "${arch_export_dir}"
 
-  "${PY}" -m rfbd.cli train binary \
-    --dataset-dir "${DATASET_DIR}" \
-    --out-dir "${arch_model_dir}" \
-    --model-name "${arch}_binary.pt" \
-    --arch "${arch}" \
-    --epochs "${EPOCHS}" \
-    --batch-size "${BATCH_SIZE}" \
-    --val-fraction "${VAL_FRACTION}" \
-    --target-far "${TARGET_FAR}" \
-    --seed "${SEED}" \
-    "${GPU_FLAG[@]}"
+  if [[ "${SKIP_EXISTING}" == "1" && -f "${model_ckpt}" ]]; then
+    echo "Skipping train; found ${model_ckpt}"
+  else
+    "${PY}" -m rfbd.cli train binary \
+      --dataset-dir "${DATASET_DIR}" \
+      --out-dir "${arch_model_dir}" \
+      --model-name "${arch}_binary.pt" \
+      --arch "${arch}" \
+      --epochs "${EPOCHS}" \
+      --batch-size "${BATCH_SIZE}" \
+      --val-fraction "${VAL_FRACTION}" \
+      --target-far "${TARGET_FAR}" \
+      --seed "${SEED}" \
+      "${GPU_FLAG[@]}"
+  fi
 
   echo "=== [${arch}] eval ==="
-  "${PY}" -m rfbd.cli eval \
-    --dataset-dir "${DATASET_DIR}" \
-    --out-dir "${arch_eval_dir}" \
-    --arch "${arch}" \
-    --epochs "${EPOCHS}" \
-    --batch-size "${BATCH_SIZE}" \
-    --val-fraction "${VAL_FRACTION}" \
-    --target-far "${TARGET_FAR}" \
-    --custom-domain custom_bg \
-    --custom-session-fraction 0.2 \
-    --seed "${SEED}" \
-    "${GPU_FLAG[@]}"
+  if [[ "${SKIP_EXISTING}" == "1" && -f "${eval_report}" ]]; then
+    echo "Skipping eval; found ${eval_report}"
+  else
+    "${PY}" -m rfbd.cli eval \
+      --dataset-dir "${DATASET_DIR}" \
+      --out-dir "${arch_eval_dir}" \
+      --arch "${arch}" \
+      --epochs "${EPOCHS}" \
+      --batch-size "${BATCH_SIZE}" \
+      --val-fraction "${VAL_FRACTION}" \
+      --target-far "${TARGET_FAR}" \
+      --custom-domain custom_bg \
+      --custom-session-fraction 0.2 \
+      --seed "${SEED}" \
+      "${GPU_FLAG[@]}"
+  fi
 
   echo "=== [${arch}] export ==="
-  "${PY}" -m rfbd.cli export \
-    --checkpoint "${arch_model_dir}/${arch}_binary.pt" \
-    --out-dir "${arch_export_dir}" \
-    --format torchscript \
-    --format onnx || true
+  if [[ "${SKIP_EXISTING}" == "1" && -f "${export_summary}" ]]; then
+    echo "Skipping export; found ${export_summary}"
+  else
+    "${PY}" -m rfbd.cli export \
+      --checkpoint "${model_ckpt}" \
+      --out-dir "${arch_export_dir}" \
+      --format torchscript \
+      --format onnx || true
+  fi
 
   onnx_path="${arch_export_dir}/${arch}_binary_${arch}.onnx"
   bench_args=(
@@ -96,7 +113,11 @@ for arch in "${ARCHES[@]}"; do
   fi
 
   echo "=== [${arch}] benchmark ==="
-  "${PY}" "${ROOT}/scripts/benchmark_binary_runtime.py" "${bench_args[@]}"
+  if [[ "${SKIP_EXISTING}" == "1" && -f "${bench_json}" ]]; then
+    echo "Skipping benchmark; found ${bench_json}"
+  else
+    "${PY}" "${ROOT}/scripts/benchmark_binary_runtime.py" "${bench_args[@]}"
+  fi
 done
 
 echo ""
@@ -250,32 +271,42 @@ for arch in "${strict_candidates[@]}"; do
   echo "=== [${arch}] strict-FAR train/eval (target_far=${STRICT_TARGET_FAR}) ==="
   strict_model_dir="${STRICT_ROOT}/models/${arch}"
   strict_eval_dir="${STRICT_ROOT}/eval/${arch}"
+  strict_model_ckpt="${strict_model_dir}/${arch}_binary_far003.pt"
+  strict_eval_report="${strict_eval_dir}/domain_holdout_report.json"
   mkdir -p "${strict_model_dir}" "${strict_eval_dir}"
 
-  "${PY}" -m rfbd.cli train binary \
-    --dataset-dir "${DATASET_DIR}" \
-    --out-dir "${strict_model_dir}" \
-    --model-name "${arch}_binary_far003.pt" \
-    --arch "${arch}" \
-    --epochs "${EPOCHS}" \
-    --batch-size "${BATCH_SIZE}" \
-    --val-fraction "${VAL_FRACTION}" \
-    --target-far "${STRICT_TARGET_FAR}" \
-    --seed "${SEED}" \
-    "${GPU_FLAG[@]}"
+  if [[ "${SKIP_EXISTING}" == "1" && -f "${strict_model_ckpt}" ]]; then
+    echo "Skipping strict-FAR train; found ${strict_model_ckpt}"
+  else
+    "${PY}" -m rfbd.cli train binary \
+      --dataset-dir "${DATASET_DIR}" \
+      --out-dir "${strict_model_dir}" \
+      --model-name "${arch}_binary_far003.pt" \
+      --arch "${arch}" \
+      --epochs "${EPOCHS}" \
+      --batch-size "${BATCH_SIZE}" \
+      --val-fraction "${VAL_FRACTION}" \
+      --target-far "${STRICT_TARGET_FAR}" \
+      --seed "${SEED}" \
+      "${GPU_FLAG[@]}"
+  fi
 
-  "${PY}" -m rfbd.cli eval \
-    --dataset-dir "${DATASET_DIR}" \
-    --out-dir "${strict_eval_dir}" \
-    --arch "${arch}" \
-    --epochs "${EPOCHS}" \
-    --batch-size "${BATCH_SIZE}" \
-    --val-fraction "${VAL_FRACTION}" \
-    --target-far "${STRICT_TARGET_FAR}" \
-    --custom-domain custom_bg \
-    --custom-session-fraction 0.2 \
-    --seed "${SEED}" \
-    "${GPU_FLAG[@]}"
+  if [[ "${SKIP_EXISTING}" == "1" && -f "${strict_eval_report}" ]]; then
+    echo "Skipping strict-FAR eval; found ${strict_eval_report}"
+  else
+    "${PY}" -m rfbd.cli eval \
+      --dataset-dir "${DATASET_DIR}" \
+      --out-dir "${strict_eval_dir}" \
+      --arch "${arch}" \
+      --epochs "${EPOCHS}" \
+      --batch-size "${BATCH_SIZE}" \
+      --val-fraction "${VAL_FRACTION}" \
+      --target-far "${STRICT_TARGET_FAR}" \
+      --custom-domain custom_bg \
+      --custom-session-fraction 0.2 \
+      --seed "${SEED}" \
+      "${GPU_FLAG[@]}"
+  fi
 done
 
 echo ""

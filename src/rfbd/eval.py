@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import gc
 from dataclasses import asdict
 from pathlib import Path
 from typing import Dict, Tuple
@@ -21,18 +22,14 @@ from .training import (
     preprocessing_contract,
     resolve_device,
     stratified_val_split,
-    train_binary,
+    train_binary_indexed,
 )
 
 
-def _subset(data: Dict[str, np.ndarray], mask: np.ndarray) -> Dict[str, np.ndarray]:
-    return {k: v[mask] for k, v in data.items()}
-
-
-def _train_test_by_domain(data: Dict[str, np.ndarray], domain: str) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
+def _train_test_by_domain(data: Dict[str, np.ndarray], domain: str) -> Tuple[np.ndarray, np.ndarray]:
     test_mask = data["source_domain"] == domain
     train_mask = ~test_mask
-    return _subset(data, train_mask), _subset(data, test_mask)
+    return np.flatnonzero(train_mask), np.flatnonzero(test_mask)
 
 
 def _train_test_custom_session_holdout(
@@ -40,7 +37,7 @@ def _train_test_custom_session_holdout(
     custom_domain: str = "custom_bg",
     session_fraction: float = 0.2,
     seed: int = 13,
-) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
+) -> Tuple[np.ndarray, np.ndarray]:
     domain = data["source_domain"]
     sessions = data["session_id"]
 
@@ -63,15 +60,15 @@ def _train_test_custom_session_holdout(
         dtype=bool,
     )
     train_mask = ~test_mask
-    return _subset(data, train_mask), _subset(data, test_mask)
+    return np.flatnonzero(train_mask), np.flatnonzero(test_mask)
 
 
-def _validate_split(train: Dict[str, np.ndarray], test: Dict[str, np.ndarray], split_name: str) -> None:
-    if len(test["y"]) == 0:
+def _validate_split(y: np.ndarray, train_idx: np.ndarray, test_idx: np.ndarray, split_name: str) -> None:
+    if len(test_idx) == 0:
         raise ValueError(f"Split '{split_name}' has empty test set")
-    if len(train["y"]) == 0:
+    if len(train_idx) == 0:
         raise ValueError(f"Split '{split_name}' has empty training set")
-    if len(np.unique(train["y"])) < 2:
+    if len(np.unique(y[train_idx])) < 2:
         raise ValueError(f"Split '{split_name}' training set must contain both classes")
 
 
@@ -91,6 +88,8 @@ def run_eval(args: argparse.Namespace) -> None:
     device = resolve_device(require_gpu=bool(getattr(args, "require_gpu", False)))
 
     data = load_dataset_arrays(args.dataset_dir)
+    X = np.asarray(data["feat"], dtype=np.float32)
+    y = np.asarray(data["y"], dtype=np.int64)
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -127,21 +126,24 @@ def run_eval(args: argparse.Namespace) -> None:
         "label_contract": label_contract(),
     }
 
-    for split_name, train_data, test_data in splits:
-        _validate_split(train_data, test_data, split_name)
+    for split_name, train_idx, test_idx in splits:
+        _validate_split(y, train_idx, test_idx, split_name)
 
-        X_train_all = train_data["feat"].astype(np.float32)
-        y_train_all = train_data["y"].astype(np.int64)
+        y_train_all = y[train_idx]
+        tr_rel_idx, val_rel_idx = stratified_val_split(y_train_all, val_fraction=args.val_fraction, seed=args.seed)
+        tr_idx = train_idx[tr_rel_idx]
+        val_idx = train_idx[val_rel_idx]
 
-        tr_idx, val_idx = stratified_val_split(y_train_all, val_fraction=args.val_fraction, seed=args.seed)
-        X_train, y_train = X_train_all[tr_idx], y_train_all[tr_idx]
-        X_val, y_val = X_train_all[val_idx], y_train_all[val_idx]
+        model, threshold, val_metrics = train_binary_indexed(X, y, tr_idx, val_idx, cfg, device=device)
 
-        model, threshold, val_metrics = train_binary(X_train, y_train, X_val, y_val, cfg, device=device)
-
-        X_test = test_data["feat"].astype(np.float32)
-        y_test = test_data["y"].astype(np.int64)
-        prob_test = predict_proba(model, X_test, batch_size=max(cfg.batch_size, 128), device=device)
+        y_test = y[test_idx]
+        prob_test = predict_proba(
+            model,
+            X,
+            batch_size=max(cfg.batch_size, 128),
+            device=device,
+            indices=test_idx,
+        )
         test_summary = summarize_binary(y_test, prob_test, threshold)
 
         ckpt_path = out_dir / f"{cfg.arch}_binary_{split_name}.pt"
@@ -171,7 +173,7 @@ def run_eval(args: argparse.Namespace) -> None:
                 "recall": float(test_summary.recall),
                 "far": float(test_summary.far),
                 "confusion_matrix": test_summary.confusion_matrix,
-                "test_size": int(len(y_test)),
+                "test_size": int(len(test_idx)),
             },
         }
 
@@ -179,6 +181,10 @@ def run_eval(args: argparse.Namespace) -> None:
             f"[{cfg.arch}:{split_name}] roc_auc={test_summary.roc_auc:.4f} "
             f"pr_auc={test_summary.pr_auc:.4f} f1={test_summary.f1:.4f} far={test_summary.far:.4f}"
         )
+        del model, prob_test, y_test, y_train_all
+        gc.collect()
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
 
     save_json(out_dir / "domain_holdout_report.json", report)
     print(f"Evaluation report written to {out_dir / 'domain_holdout_report.json'}")
