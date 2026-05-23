@@ -7,6 +7,7 @@ import argparse
 from .dataset_build import add_dataset_subparser
 from .eval import add_eval_subparser
 from .export import add_export_subparser
+from .hailo import add_hailo_subparser
 from .extract import add_extract_subparser
 from .no_drone_batches import add_no_drone_batches_subparser
 from .training import add_train_subparser
@@ -22,6 +23,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_train_subparser(subparsers)
     add_eval_subparser(subparsers)
     add_export_subparser(subparsers)
+    add_hailo_subparser(subparsers)
 
     return parser
 

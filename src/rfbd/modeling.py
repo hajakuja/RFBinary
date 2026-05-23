@@ -126,10 +126,11 @@ class BinaryImageClassifier(nn.Module):
             x = x.unsqueeze(1)
         if x.ndim != 4:
             raise ValueError(f"Expected input ndim 3/4, got {x.shape}")
-        if x.shape[1] not in {1, 3}:
-            raise ValueError(f"Expected channel count 1 or 3, got {x.shape[1]}")
-        if x.shape[1] == 1:
+        channels = x.shape[1]
+        if channels == 1:
             x = x.repeat(1, 3, 1, 1)
+        elif channels != 3:
+            raise ValueError(f"Expected channel count 1 or 3, got {channels}")
         return self.backbone(x)
 
 

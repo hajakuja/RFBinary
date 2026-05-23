@@ -11,6 +11,7 @@ Standalone binary drone/no-drone pipeline built from ideas in `RFClassification`
 - `rfbd train vgg-binary` (compat alias to `--arch vgg16`)
 - `rfbd eval`
 - `rfbd export`
+- `rfbd hailo prepare`
 
 ## Data contracts
 
@@ -74,6 +75,44 @@ Key outputs:
 - `data/experiments/g2_edge_suite/leaderboard/leaderboard.json`
 - `data/experiments/g2_edge_suite/leaderboard/leaderboard.csv`
 - `data/experiments/g2_edge_suite/leaderboard/strict_far_report.json`
+
+## Hailo Compilation Planning
+
+Canonical Hailo planning document:
+
+- `hailo_compilation_plan.md`
+
+Hailo workspace preparation command:
+
+```bash
+rfbd hailo prepare
+```
+
+This command:
+
+- discovers the current deployable checkpoints from `g2_edge_suite`
+- exports static-batch ONNX artifacts for Hailo compilation
+- creates mirrored `strict_far/exports/` roots when needed
+- writes target-specific Hailo manifest stubs for `hailo8` and `hailo8l`
+- writes `data/experiments/g2_edge_suite/hailo_compilation_inventory.json`
+
+HEF compilation command:
+
+```bash
+rfbd hailo compile --calibration-samples 256
+```
+
+This command:
+
+- reuses or regenerates the static-batch ONNX exports
+- builds an NHWC calibration `.npy` from `data/datasets/binary_all_v1`
+- runs Hailo `parser`, `optimize`, and `compiler` for each selected target
+- writes `.hef`, `.har`, `.log`, and command-record artifacts under each model's `hailo/` directory
+- updates each manifest with the real compiled artifact paths and detected Hailo tool versions
+
+Legacy typoed filename kept as a compatibility pointer:
+
+- `halio_compilation_plan.md`
 
 ## Host GPU Run (No-Reboot Recovery + RAM-Safe Dataset)
 

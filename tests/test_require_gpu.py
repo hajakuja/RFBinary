@@ -66,6 +66,22 @@ def test_cli_parses_require_gpu_flags():
             "/tmp/export",
             "--format",
             "onnx",
+            "--static-batch",
         ]
     )
     assert export_args.format == ["onnx"]
+    assert export_args.static_batch is True
+
+    hailo_args = parser.parse_args(
+        [
+            "hailo",
+            "prepare",
+            "--target",
+            "hailo8",
+            "--skip-existing",
+            "--no-strict-far",
+        ]
+    )
+    assert hailo_args.target == ["hailo8"]
+    assert hailo_args.skip_existing is True
+    assert hailo_args.include_strict_far is False
