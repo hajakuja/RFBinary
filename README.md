@@ -83,11 +83,7 @@ Key outputs:
 - `data/experiments/g2_edge_suite/leaderboard/leaderboard.csv`
 - `data/experiments/g2_edge_suite/leaderboard/strict_far_report.json`
 
-## Hailo Compilation Planning
-
-Canonical Hailo planning document:
-
-- `hailo_compilation_plan.md`
+## Hailo Compilation
 
 Hailo workspace preparation command:
 
