@@ -9,7 +9,7 @@ description = "Binary drone/no-drone RF pipeline with fast feature extraction"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-  "numpy==2.3.5",
+  "numpy==1.26.4",
   "onnx==1.19.1",
   "scipy==1.16.3",
   "opencv-python==4.11.0.86",
