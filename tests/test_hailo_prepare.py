@@ -34,13 +34,13 @@ def _write_checkpoint(path: Path, arch: str, threshold: float) -> None:
 
 def test_hailo_prepare_writes_exports_manifests_and_inventory(tmp_path: Path, monkeypatch):
     repo_root = tmp_path / "repo"
-    base_ckpt = repo_root / "data/experiments/g2_edge_suite/models/vgg16/vgg16_binary.pt"
+    base_ckpt = repo_root / "data/experiments/g2_edge_suite/models/vgg_small_gap/vgg_small_gap_binary.pt"
     strict_ckpt = (
         repo_root
-        / "data/experiments/g2_edge_suite/strict_far/models/mobilenet_v3_small/mobilenet_v3_small_binary_far003.pt"
+        / "data/experiments/g2_edge_suite/strict_far/models/resnet34/resnet34_binary_far003.pt"
     )
-    _write_checkpoint(base_ckpt, arch="vgg16", threshold=0.77)
-    _write_checkpoint(strict_ckpt, arch="mobilenet_v3_small", threshold=0.8)
+    _write_checkpoint(base_ckpt, arch="vgg_small_gap", threshold=0.75)
+    _write_checkpoint(strict_ckpt, arch="resnet34", threshold=0.8)
 
     def fake_export_checkpoint(**kwargs):
         checkpoint = Path(kwargs["checkpoint"])
@@ -87,7 +87,7 @@ def test_hailo_prepare_writes_exports_manifests_and_inventory(tmp_path: Path, mo
     run_hailo_prepare(
         argparse.Namespace(
             repo_root=str(repo_root),
-            target=["hailo8", "hailo8l"],
+            target=["hailo8"],
             onnx_opset=17,
             skip_existing=False,
             include_strict_far=True,
@@ -98,12 +98,12 @@ def test_hailo_prepare_writes_exports_manifests_and_inventory(tmp_path: Path, mo
 
     base_manifest = (
         repo_root
-        / "data/experiments/g2_edge_suite/exports/vgg16/hailo/vgg16_binary.hailo8.manifest.json"
+        / "data/experiments/g2_edge_suite/exports/vgg_small_gap/hailo/vgg_small_gap_binary.hailo8.manifest.json"
     )
     strict_manifest = (
         repo_root
-        / "data/experiments/g2_edge_suite/strict_far/exports/mobilenet_v3_small/hailo/"
-        / "mobilenet_v3_small_binary_far003.hailo8l.manifest.json"
+        / "data/experiments/g2_edge_suite/strict_far/exports/resnet34/hailo/"
+        / "resnet34_binary_far003.hailo8.manifest.json"
     )
     inventory_path = repo_root / "data/experiments/g2_edge_suite/hailo_compilation_inventory.json"
     calibration_readme = repo_root / "data/experiments/g2_edge_suite/hailo_calibration/README.md"
@@ -114,38 +114,38 @@ def test_hailo_prepare_writes_exports_manifests_and_inventory(tmp_path: Path, mo
     assert calibration_readme.exists()
 
     base_payload = json.loads(base_manifest.read_text(encoding="utf-8"))
-    assert base_payload["model_id"] == "vgg16_binary"
+    assert base_payload["model_id"] == "vgg_small_gap_binary"
     assert base_payload["variant"] == "base"
     assert base_payload["target_arch"] == "hailo8"
-    assert base_payload["hef_path"] == "data/experiments/g2_edge_suite/exports/vgg16/hailo/vgg16_binary.hailo8.hef"
-    assert base_payload["source_onnx"] == "data/experiments/g2_edge_suite/exports/vgg16/vgg16_binary_vgg16.onnx"
+    assert base_payload["hef_path"] == "data/experiments/g2_edge_suite/exports/vgg_small_gap/hailo/vgg_small_gap_binary.hailo8.hef"
+    assert base_payload["source_onnx"] == "data/experiments/g2_edge_suite/exports/vgg_small_gap/vgg_small_gap_binary_vgg_small_gap.onnx"
 
     strict_payload = json.loads(strict_manifest.read_text(encoding="utf-8"))
     assert strict_payload["variant"] == "strict_far"
-    assert strict_payload["target_arch"] == "hailo8l"
+    assert strict_payload["target_arch"] == "hailo8"
     assert strict_payload["checkpoint_path"].startswith("data/experiments/g2_edge_suite/strict_far/models/")
 
     inventory_payload = json.loads(inventory_path.read_text(encoding="utf-8"))
     assert inventory_payload["checkpoint_count"] == 2
-    assert inventory_payload["targets"] == ["hailo8", "hailo8l"]
-    assert inventory_payload["unique_arches"] == ["mobilenet_v3_small", "vgg16"]
+    assert inventory_payload["targets"] == ["hailo8"]
+    assert inventory_payload["unique_arches"] == ["resnet34", "vgg_small_gap"]
 
 
 def test_hailo_prepare_skip_existing_reuses_summary(tmp_path: Path, monkeypatch):
     repo_root = tmp_path / "repo"
-    checkpoint = repo_root / "data/experiments/g2_edge_suite/models/resnet18/resnet18_binary.pt"
-    _write_checkpoint(checkpoint, arch="resnet18", threshold=0.82)
+    checkpoint = repo_root / "data/experiments/g2_edge_suite/models/resnet34/resnet34_binary.pt"
+    _write_checkpoint(checkpoint, arch="resnet34", threshold=0.82)
 
-    export_dir = repo_root / "data/experiments/g2_edge_suite/exports/resnet18"
+    export_dir = repo_root / "data/experiments/g2_edge_suite/exports/resnet34"
     export_dir.mkdir(parents=True, exist_ok=True)
-    onnx_path = export_dir / "resnet18_binary_resnet18.onnx"
+    onnx_path = export_dir / "resnet34_binary_resnet34.onnx"
     onnx_path.write_bytes(b"fake-onnx")
-    summary_path = export_dir / "resnet18_binary_resnet18_export_summary.json"
+    summary_path = export_dir / "resnet34_binary_resnet34_export_summary.json"
     summary_path.write_text(
         json.dumps(
             {
                 "checkpoint": str(checkpoint),
-                "arch": "resnet18",
+                "arch": "resnet34",
                 "threshold": 0.82,
                 "preprocessing_contract": {
                     "segment_ms": 20,
@@ -193,5 +193,5 @@ def test_hailo_prepare_skip_existing_reuses_summary(tmp_path: Path, monkeypatch)
         )
     )
 
-    manifest_path = repo_root / "data/experiments/g2_edge_suite/exports/resnet18/hailo/resnet18_binary.hailo8.manifest.json"
+    manifest_path = repo_root / "data/experiments/g2_edge_suite/exports/resnet34/hailo/resnet34_binary.hailo8.manifest.json"
     assert manifest_path.exists()

@@ -8,6 +8,11 @@ from typing import Dict, Iterable, Tuple
 import numpy as np
 
 
+def _trapezoid(y: np.ndarray, x: np.ndarray) -> float:
+    integrate = getattr(np, "trapezoid", np.trapz)
+    return float(integrate(y, x))
+
+
 @dataclass
 class BinaryMetrics:
     threshold: float
@@ -73,7 +78,7 @@ def roc_auc_np(y_true: np.ndarray, y_score: np.ndarray) -> float:
         return float("nan")
     _, fpr, tpr, _, _ = _binary_curve(y_true, y_score)
     order = np.argsort(fpr)
-    return float(np.trapezoid(tpr[order], fpr[order]))
+    return _trapezoid(tpr[order], fpr[order])
 
 
 def pr_auc_np(y_true: np.ndarray, y_score: np.ndarray) -> float:
@@ -82,7 +87,7 @@ def pr_auc_np(y_true: np.ndarray, y_score: np.ndarray) -> float:
         return float("nan")
     _, _, _, precision, recall = _binary_curve(y_true, y_score)
     order = np.argsort(recall)
-    return float(np.trapezoid(precision[order], recall[order]))
+    return _trapezoid(precision[order], recall[order])
 
 
 def tune_threshold(y_true: np.ndarray, y_prob: np.ndarray, target_far: float = 0.05) -> float:

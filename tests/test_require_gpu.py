@@ -22,12 +22,12 @@ def test_cli_parses_require_gpu_flags():
             "--out-dir",
             "/tmp/out",
             "--arch",
-            "mobilenet_v3_small",
+            "vgg_small_gap",
             "--require-gpu",
         ]
     )
     assert train_args.require_gpu is True
-    assert train_args.arch == "mobilenet_v3_small"
+    assert train_args.arch == "vgg_small_gap"
 
     legacy_args = parser.parse_args(
         [
@@ -50,12 +50,12 @@ def test_cli_parses_require_gpu_flags():
             "--out-dir",
             "/tmp/out",
             "--arch",
-            "resnet18",
+            "resnet50",
             "--require-gpu",
         ]
     )
     assert eval_args.require_gpu is True
-    assert eval_args.arch == "resnet18"
+    assert eval_args.arch == "resnet50"
 
     export_args = parser.parse_args(
         [
@@ -85,3 +85,35 @@ def test_cli_parses_require_gpu_flags():
     assert hailo_args.target == ["hailo8"]
     assert hailo_args.skip_existing is True
     assert hailo_args.include_strict_far is False
+
+    hailo_compile_args = parser.parse_args(
+        [
+            "hailo",
+            "compile",
+            "--model-id",
+            "vgg16_binary",
+            "--runtime-metrics-json",
+            "/tmp/runtime.json",
+            "--hardware-results-json",
+            "/tmp/hardware.json",
+        ]
+    )
+    assert hailo_compile_args.model_id == ["vgg16_binary"]
+    assert hailo_compile_args.runtime_metrics_json == "/tmp/runtime.json"
+    assert hailo_compile_args.hardware_results_json == "/tmp/hardware.json"
+
+    hailo_validate_args = parser.parse_args(
+        [
+            "hailo",
+            "validate",
+            "--model-id",
+            "vgg16_binary",
+            "--target",
+            "hailo8",
+            "--runtime-metrics-json",
+            "/tmp/runtime.json",
+        ]
+    )
+    assert hailo_validate_args.model_id == ["vgg16_binary"]
+    assert hailo_validate_args.target == ["hailo8"]
+    assert hailo_validate_args.runtime_metrics_json == "/tmp/runtime.json"

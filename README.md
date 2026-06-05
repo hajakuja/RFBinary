@@ -12,6 +12,8 @@ Standalone binary drone/no-drone pipeline built from ideas in `RFClassification`
 - `rfbd eval`
 - `rfbd export`
 - `rfbd hailo prepare`
+- `rfbd hailo compile`
+- `rfbd hailo validate`
 
 ## Data contracts
 
@@ -47,6 +49,11 @@ Supported architectures:
 - `resnet18`
 - `mobilenet_v3_small`
 - `shufflenet_v2_x1_0`
+- `vgg13`
+- `resnet34`
+- `resnet50`
+- `regnet_x_1_6gf`
+- `vgg_small_gap`
 
 Checkpoint metadata now includes:
 
@@ -109,6 +116,25 @@ This command:
 - runs Hailo `parser`, `optimize`, and `compiler` for each selected target
 - writes `.hef`, `.har`, `.log`, and command-record artifacts under each model's `hailo/` directory
 - updates each manifest with the real compiled artifact paths and detected Hailo tool versions
+- auto-validates compiled artifacts and leaves them non-deployable until quality and runtime gates pass
+- treats `vgg13`/`vgg16` Hailo artifacts as legacy reference only; use `vgg_small_gap` for the Hailo-friendly VGG-style path
+
+HEF validation command:
+
+```bash
+rfbd hailo validate --model-id vgg16_binary --target hailo8 --runtime-metrics-json /path/runtime.json
+```
+
+This command:
+
+- builds a deterministic probe corpus with synthetic and real PSD frames
+- compares PyTorch, ONNX, and available Hailo-emulation stages on the same probes
+- writes per-target `*.validation.json` reports
+- marks `deployable` in the manifest only when the artifact passes both quality and runtime gates
+
+G2 VGG16 handoff:
+
+- `g2_vgg16_hailo_fix_handoff.md`
 
 Legacy typoed filename kept as a compatibility pointer:
 

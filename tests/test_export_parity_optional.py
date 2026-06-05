@@ -13,7 +13,7 @@ from rfbd.modeling import create_binary_model
 def test_onnx_export_logits_parity_when_ort_available(tmp_path: Path):
     ort = pytest.importorskip("onnxruntime")
 
-    arch = "mobilenet_v3_small"
+    arch = "vgg_small_gap"
     model = create_binary_model(arch=arch, pretrained=False, freeze_features=False)
     model.eval()
 
@@ -49,7 +49,7 @@ def test_onnx_export_logits_parity_when_ort_available(tmp_path: Path):
         )
     )
 
-    summary_path = out_dir / "model_mobilenet_v3_small_export_summary.json"
+    summary_path = out_dir / "model_vgg_small_gap_export_summary.json"
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     if "onnx" in summary.get("skipped", {}):
         pytest.skip(f"ONNX export unavailable: {summary['skipped']['onnx']}")
@@ -68,7 +68,7 @@ def test_onnx_export_logits_parity_when_ort_available(tmp_path: Path):
 
 
 def test_export_checkpoint_static_batch_omits_dynamic_axes(tmp_path: Path, monkeypatch):
-    arch = "mobilenet_v3_small"
+    arch = "vgg_small_gap"
     model = create_binary_model(arch=arch, pretrained=False, freeze_features=False)
     model.eval()
 
