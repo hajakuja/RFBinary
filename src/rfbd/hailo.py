@@ -20,6 +20,7 @@ from .contracts import FeatureConfig
 from .export import export_checkpoint
 from .features import compute_spec_feature, samples_per_segment
 from .io import iter_npz_files, load_json, load_npz_shard, save_json
+from .modeling import REPVGG_ARCHES
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -50,6 +51,7 @@ VGG_FAMILY_ARCHES = frozenset({"vgg13", "vgg16"})
 FLAT_LOGIT_SPREAD_EPS = 1e-3
 FLAT_P_DRONE_VARIANCE_EPS = 1e-6
 ORDERING_SPEARMAN_MIN = 0.9
+HAILO_EMULATION_BATCH_SIZE = 8
 
 CALIBRATION_README = """# Hailo Calibration Assets
 
@@ -426,6 +428,16 @@ def _load_existing_export_summary(summary_path: Path) -> Dict[str, object]:
         return {}
     if not Path(str(onnx_path)).exists():
         return {}
+    if payload.get("arch") in REPVGG_ARCHES:
+        export_contract = payload.get("export_contract", {})
+        expected_opset = int(export_contract.get("onnx_opset", 17)) if isinstance(export_contract, dict) else 17
+        metadata = payload.get("onnx_metadata", {})
+        if not isinstance(metadata, dict):
+            return {}
+        if metadata.get("actual_default_opset") != expected_opset:
+            return {}
+        if expected_opset < 18 and metadata.get("exporter") != "legacy_torchscript":
+            return {}
     return payload
 
 
@@ -973,6 +985,9 @@ def _rehydrate_manifest_from_disk(
         payload["validation_report"] = _repo_relative(repo_root, validation_report_path)
         report = load_json(validation_report_path, default={})
         if isinstance(report, dict):
+            runtime_contract = report.get("runtime_contract")
+            if isinstance(runtime_contract, dict):
+                payload.update(_runtime_contract_from_payload(runtime_contract))
             if "deployable" in report:
                 payload["deployable"] = bool(report["deployable"])
             if "deployment_decision" in report:
@@ -1453,14 +1468,37 @@ def _run_hailo_emulation_stage(
     if ClientRunner is None or InferenceContext is None:
         return None
 
-    runner = ClientRunner(har=str(har_path))
     ctx_enum = getattr(InferenceContext, context_name)
-    rows: List[np.ndarray] = []
-    with runner.infer_context(ctx_enum) as ctx:
-        for frame in np.asarray(host_frames):
-            output = runner.infer(ctx, frame[None, ...], batch_size=1)
-            rows.append(_coerce_logits_batch(output, expected_count=1))
-    return np.concatenate(rows, axis=0) if rows else np.empty((0, 2), dtype=np.float32)
+    frames = np.asarray(host_frames)
+    if len(frames) == 0:
+        return np.empty((0, 2), dtype=np.float32)
+
+    def run_batched() -> np.ndarray:
+        runner = ClientRunner(har=str(har_path))
+        rows: List[np.ndarray] = []
+        with runner.infer_context(ctx_enum) as ctx:
+            for start in range(0, len(frames), HAILO_EMULATION_BATCH_SIZE):
+                chunk = frames[start : start + HAILO_EMULATION_BATCH_SIZE]
+                output = runner.infer(ctx, chunk, batch_size=len(chunk))
+                rows.append(_coerce_logits_batch(output, expected_count=len(chunk)))
+        return np.concatenate(rows, axis=0)
+
+    def run_per_frame() -> np.ndarray:
+        runner = ClientRunner(har=str(har_path))
+        rows: List[np.ndarray] = []
+        with runner.infer_context(ctx_enum) as ctx:
+            for frame in frames:
+                output = runner.infer(ctx, frame[None, ...], batch_size=1)
+                rows.append(_coerce_logits_batch(output, expected_count=1))
+        return np.concatenate(rows, axis=0)
+
+    try:
+        return run_batched()
+    except Exception:
+        # Some Hailo SDK emulation contexts only accept batch_size=1. Keep those
+        # paths working, but prefer batching because per-frame calls retain a lot
+        # of TensorFlow/Hailo graph state during validation.
+        return run_per_frame()
 
 
 def _load_runtime_metrics(runtime_metrics_json: Path | None) -> Dict[str, object] | None:

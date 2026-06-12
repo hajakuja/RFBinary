@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 import torch
 
 from rfbd.hailo import build_hailo_calibration_set, run_hailo_compile
@@ -110,10 +111,11 @@ def test_build_hailo_calibration_set_samples_high_range_late_shards(tmp_path: Pa
     assert metadata["selected_class_counts"] == {"0": 2, "1": 2} or metadata["selected_class_counts"] == {0: 2, 1: 2}
 
 
-def test_hailo_compile_generates_vgg_small_gap_hef_and_updates_manifest(tmp_path: Path, monkeypatch):
+@pytest.mark.parametrize("arch", ["vgg_small_gap", "repvgg_a1_hmz"])
+def test_hailo_compile_generates_base_hef_and_updates_manifest(tmp_path: Path, monkeypatch, arch: str):
     repo_root = tmp_path / "repo"
-    checkpoint = repo_root / "data/experiments/g2_edge_suite/models/vgg_small_gap/vgg_small_gap_binary.pt"
-    _write_checkpoint(checkpoint, arch="vgg_small_gap", threshold=0.69)
+    checkpoint = repo_root / f"data/experiments/g2_edge_suite/models/{arch}/{arch}_binary.pt"
+    _write_checkpoint(checkpoint, arch=arch, threshold=0.69)
     _write_dataset_shard(
         repo_root / "data/datasets/binary_all_v1/binary_all_v1_shard_00000.npz",
         count_per_class=8,
@@ -241,18 +243,18 @@ def test_hailo_compile_generates_vgg_small_gap_hef_and_updates_manifest(tmp_path
 
     hef_path = (
         repo_root
-        / "data/experiments/g2_edge_suite/exports/vgg_small_gap/hailo/"
-        / "vgg_small_gap_binary.hailo8.hef"
+        / f"data/experiments/g2_edge_suite/exports/{arch}/hailo/"
+        / f"{arch}_binary.hailo8.hef"
     )
     manifest_path = (
         repo_root
-        / "data/experiments/g2_edge_suite/exports/vgg_small_gap/hailo/"
-        / "vgg_small_gap_binary.hailo8.manifest.json"
+        / f"data/experiments/g2_edge_suite/exports/{arch}/hailo/"
+        / f"{arch}_binary.hailo8.manifest.json"
     )
     commands_path = (
         repo_root
-        / "data/experiments/g2_edge_suite/exports/vgg_small_gap/hailo/"
-        / "vgg_small_gap_binary.hailo8.commands.json"
+        / f"data/experiments/g2_edge_suite/exports/{arch}/hailo/"
+        / f"{arch}_binary.hailo8.commands.json"
     )
 
     assert hef_path.exists()

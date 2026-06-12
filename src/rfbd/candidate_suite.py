@@ -16,6 +16,8 @@ DEFAULT_BASE_ARCHES = (
     "resnet50",
     "regnet_x_1_6gf",
     "vgg_small_gap",
+    "repvgg_a1_hmz",
+    "repvgg_a2_hmz",
 )
 LEGACY_REFERENCE_ARCHES = ("vgg13", "vgg16", "mobilenet_v3_small", "resnet18")
 LEGACY_VGG_ARCHES = frozenset({"vgg13", "vgg16"})

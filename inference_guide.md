@@ -37,8 +37,36 @@ Baseline learned decision threshold:
 
 Current compatibility and architecture notes:
 - New checkpoints include `arch` and can be loaded with `rfbd.modeling.create_binary_model(...)`.
-- Supported architectures: `vgg16`, `resnet18`, `mobilenet_v3_small`, `shufflenet_v2_x1_0`.
+- Supported architectures: `vgg13`, `vgg16`, `resnet18`, `resnet34`, `resnet50`, `mobilenet_v3_small`, `shufflenet_v2_x1_0`, `regnet_x_1_6gf`, `vgg_small_gap`, `repvgg_a1`, `repvgg_a2`, `repvgg_a1_hmz`, `repvgg_a2_hmz`.
+- `vgg13` is the supported replacement for the requested `vgg14`; there is no separate custom `vgg14` architecture in this repo.
+- `vgg_small_gap` is the Hailo-friendly VGG-style candidate; it uses VGG-like convolution blocks with global average pooling instead of the large torchvision VGG classifier.
+- `repvgg_a1` and `repvgg_a2` are local RepVGG backup candidates trained from the repo's own initialization path.
+- `repvgg_a1_hmz` and `repvgg_a2_hmz` are the Hailo Model Zoo-initialized RepVGG backup candidates; they import the official ImageNet backbone tensors, keep the RF binary head task-specific, and export to fused deploy-form convolution blocks for ONNX/Hailo.
 - Legacy `rfbd train vgg-binary` behavior is preserved; it is a compatibility alias for `rfbd train binary --arch vgg16`.
+
+Current G2 candidate checkpoint snapshot:
+- `vgg13_binary`
+  - checkpoint: `/root/RFBinaryDetect/data/experiments/g2_edge_suite/models/vgg13/vgg13_binary.pt`
+  - threshold: `0.67`
+  - Hailo status: historical artifact only; corrected `hailo8` compile failed mapping and the old `.hef` must not be deployed
+- `vgg_small_gap_binary`
+  - checkpoint: `/root/RFBinaryDetect/data/experiments/g2_edge_suite/models/vgg_small_gap/vgg_small_gap_binary.pt` once trained
+  - Hailo status: intended replacement VGG-style candidate; compile/validation required before deployment
+- `resnet34_binary`
+  - checkpoint: `/root/RFBinaryDetect/data/experiments/g2_edge_suite/models/resnet34/resnet34_binary.pt`
+  - threshold: `0.83`
+  - Hailo status: `hailo8` `.hef` exists, but validation decision is `rejected_quality`
+- `resnet50_binary`
+  - checkpoint: `/root/RFBinaryDetect/data/experiments/g2_edge_suite/models/resnet50/resnet50_binary.pt`
+  - threshold: `0.57`
+  - Hailo status: `hailo8` `.hef` exists, but validation decision is `rejected_quality`
+- `regnet_x_1_6gf_binary`
+  - checkpoint: `/root/RFBinaryDetect/data/experiments/g2_edge_suite/models/regnet_x_1_6gf/regnet_x_1_6gf_binary.pt`
+  - threshold: `0.56`
+  - Hailo status: `hailo8` `.hef` exists, but validation decision is `rejected_quality`
+
+Live-deployment recommendation in the current repo snapshot:
+- keep using `shufflenet_v2_x1_0_binary` as the fallback live Hailo model until a newer candidate has both `deployable=true` and confirmed hardware latency on the target device
 
 Merged dataset summary used for the original baseline:
 - total samples: `34,043`
@@ -170,11 +198,12 @@ The size is dominated by Hailo compiler intermediates:
 - command records and manifest files
 
 Current size on this machine:
-- `data/experiments/g2_edge_suite/exports`: about `16 GB`
+- `data/experiments/g2_edge_suite/exports`: about `24 GB`
 - `data/experiments/g2_edge_suite/strict_far/exports`: about `264 MB`
 
-Most of that comes from `vgg16` alone:
+The biggest contributors right now are the VGG-family workspaces:
 - `exports/vgg16`: about `15 GB`
+- `exports/vgg13`: about `5.0 GB`
 
 The biggest files are compiler byproducts, not runtime payloads:
 - `vgg16_binary.hailo8l.compiled.har`: about `2.95 GB`
@@ -212,19 +241,23 @@ Not required on the Pi for inference:
 
 Practical deployment rule:
 - if you are running one Hailo model, ship one `.hef` plus one `.manifest.json`
-- if you want both `hailo8` and `hailo8l` support, ship one pair per target
+- for the current G2 candidate sweep, ship `hailo8` artifacts only
+- older baseline artifacts still include `hailo8l` outputs, but new candidate evaluation and ranking in this repo are now `hailo8`-first
 
 Current footprint of all compiled HEFs on this machine:
-- all `.hef` files together: about `314.81 MB`
-- all manifests together: about `15.21 KB`
+- all `.hef` files together: about `371.09 MB`
+- all manifests together: about `68.34 KB`
 
-That is the number to think about for Pi deployment, not the full 16 GB build tree.
+That is the number to think about for Pi deployment, not the full `24 GB` build tree.
 
 ### 7.3 Current compiled HEFs
 
 Compiled HEFs currently present:
 - `vgg16_binary.hailo8.hef`
 - `vgg16_binary.hailo8l.hef`
+- `resnet34_binary.hailo8.hef`
+- `resnet50_binary.hailo8.hef`
+- `regnet_x_1_6gf_binary.hailo8.hef`
 - `resnet18_binary.hailo8.hef`
 - `resnet18_binary.hailo8l.hef`
 - `mobilenet_v3_small_binary.hailo8.hef`
@@ -236,6 +269,7 @@ Compiled HEFs currently present:
 
 Important caveat:
 - a manifest may exist even when the `.hef` does not
+- `vgg13_binary` currently has a `hailo8` manifest and intermediate compiler outputs, but no finished `.hef` or validation report yet
 - `shufflenet_v2_x1_0_binary_far003` currently has manifest stubs, but no compiled `.hef` yet
 
 ## 8. What Was Done to Produce the Hailo Models
@@ -249,14 +283,16 @@ The Hailo artifacts were not trained natively in a Hailo-only format. The flow u
    - `hailo parser onnx`
    - `hailo optimize`
    - `hailo compiler`
-5. Save the final `.hef` plus a manifest that records the runtime contract.
+5. Validate the compiled target for flat-output, parity, manifest-contract, and latency gates.
+6. Save the final `.hef` plus a manifest that records the runtime contract and validation status.
 
 Repo commands used for that flow:
 
 ```bash
 cd /root/RFBinaryDetect
-/root/RFBinaryDetect/.venv/bin/python -m rfbd.cli hailo prepare
-/root/RFBinaryDetect/.venv/bin/python -m rfbd.cli hailo compile --calibration-samples 32
+/root/RFBinaryDetect/.venv/bin/python -m rfbd.cli hailo prepare --target hailo8
+/root/RFBinaryDetect/.venv/bin/python -m rfbd.cli hailo compile --target hailo8 --calibration-samples 32 --skip-existing
+/root/RFBinaryDetect/.venv/bin/python -m rfbd.cli hailo validate --model-id resnet34_binary --target hailo8
 ```
 
 Important implementation details:
@@ -264,6 +300,7 @@ Important implementation details:
 - The checkpoints remain the source of threshold, architecture, and preprocessing metadata.
 - Calibration data was generated from existing `NPZ` feature shards under the repo dataset tree.
 - Host-side preprocessing and host-side postprocessing were kept unchanged.
+- New candidate evaluation is `hailo8`-first. Legacy `hailo8l` artifacts still exist for older checkpoints, but they are not the default target for new work.
 - The final Hailo path still expects:
   - host preprocessing
   - Hailo execution of the model core
@@ -361,16 +398,24 @@ This repo currently packages Hailo compile outputs, but it does not yet ship a d
 ### 10.1 Select the correct files
 
 Choose the `.hef` that matches the accelerator target:
-- `hailo8` devices use `*.hailo8.hef`
-- `hailo8l` devices use `*.hailo8l.hef`
+- `hailo8` devices should use `*.hailo8.hef`
+- `hailo8l` devices should only use older legacy artifacts that were explicitly compiled for `hailo8l`
 
 Carry the matching manifest beside it:
 - `*.hailo8.manifest.json`
 - `*.hailo8l.manifest.json`
 
-Example runtime pair for `vgg16` on `hailo8l`:
-- HEF: [vgg16_binary.hailo8l.hef](/root/RFBinaryDetect/data/experiments/g2_edge_suite/exports/vgg16/hailo/vgg16_binary.hailo8l.hef)
-- Manifest: [vgg16_binary.hailo8l.manifest.json](/root/RFBinaryDetect/data/experiments/g2_edge_suite/exports/vgg16/hailo/vgg16_binary.hailo8l.manifest.json)
+Before selecting a Hailo model, check the manifest:
+- `deployable` must be `true` for live use
+- if `deployable` is `false`, follow `fallback_recommendation`
+
+In the current repo snapshot:
+- `resnet34_binary.hailo8`, `resnet50_binary.hailo8`, and `regnet_x_1_6gf_binary.hailo8` all compile, but remain `deployable=false`
+- `vgg13_binary` is `compile_failed` under the corrected contract; `vgg16_binary` is `stale_contract`
+- `vgg_small_gap_binary` is the only VGG-style architecture intended for future Hailo-8 runs
+
+The current repo-level fallback for non-deployable Hailo artifacts is:
+- `shufflenet_v2_x1_0_binary`
 
 ### 10.2 Runtime contract
 
@@ -392,6 +437,21 @@ The manifest fields you should actively consume are:
 - `input_shape`
 - `output_name`
 - `output_shape`
+- `host_input_dtype`
+- `host_input_layout`
+- `host_input_range`
+- `host_input_quantization`
+- `hailo_input_normalization`
+- `validation_report`
+- `deployable`
+
+For Hailo-8 artifacts compiled with the current linear-uint8 contract, including future `vgg_small_gap` artifacts, the intended host-to-HEF contract is:
+- host input shape: `224 x 224 x 1`
+- host input dtype: `uint8`
+- host value range: `[0,255]`
+- host layout: `NHWC`
+- extra normalization on the Pi: none
+- normalization/reconstruction back into the model domain: inside the Hailo graph, as described by the manifest
 
 ### 10.3 Minimal Pi-side integration pattern
 
@@ -409,6 +469,7 @@ frame = frame.astype(np.float32, copy=False)
 
 # Query input/output stream info from the loaded HEF with HailoRT.
 # Pack the frame in the tensor layout reported by the runtime.
+# If the manifest says host_input_dtype=uint8, quantize exactly as the manifest contract describes.
 logits = run_hef_inference(frame)                 # returns length-2 logits
 
 exp = np.exp(logits - np.max(logits))
@@ -431,11 +492,16 @@ What changes relative to PyTorch inference:
 
 Before field use, verify:
 - the Pi has Hailo runtime support installed
-- the `.hef` target matches the hardware (`hailo8` vs `hailo8l`)
+- the `.hef` target matches the hardware, with `hailo8` preferred for the current candidate set
 - the manifest matches the `.hef`
+- `deployable` is `true`, or you intentionally chose a non-live artifact for lab analysis only
 - the app queries stream metadata from the loaded `.hef`
 - preprocessing matches Section 5 exactly
 - host postprocess uses manifest threshold, not a hard-coded `0.5`
+- the first probe frames line up with the repo validation report before trusting live SDR output
+
+For the VGG16 Hailo path, also read:
+- [g2_vgg16_hailo_fix_handoff.md](/root/RFBinaryDetect/g2_vgg16_hailo_fix_handoff.md)
 
 ## 11. How to Interpret Outputs Correctly
 
@@ -469,6 +535,7 @@ Before trusting field predictions, verify:
 - using a manifest that does not match the `.hef`
 - shipping the full `exports/` tree to the Pi instead of just runtime files
 - assuming a manifest implies a compiled `.hef` exists
+- assuming a compiled `.hef` implies the model is approved for live deployment
 - wrong sample rate passed into preprocessing
 - feeding imaginary channel or magnitude instead of real channel
 - changing FFT, overlap, scaling, or resize parameters

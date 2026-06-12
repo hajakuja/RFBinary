@@ -54,6 +54,10 @@ Supported architectures:
 - `resnet50`
 - `regnet_x_1_6gf`
 - `vgg_small_gap`
+- `repvgg_a1`
+- `repvgg_a2`
+- `repvgg_a1_hmz`
+- `repvgg_a2_hmz`
 
 Checkpoint metadata now includes:
 
@@ -62,6 +66,7 @@ Checkpoint metadata now includes:
 - `config`
 - `preprocessing_contract`
 - `label_contract`
+- optional `pretrained_init` when a RepVGG checkpoint was initialized from Hailo Model Zoo ONNX weights
 
 ## Model Selection Workflow
 
@@ -76,6 +81,15 @@ Candidate suite (train/eval/export/benchmark for all architectures + leaderboard
 ```bash
 ./scripts/train_candidate_suite.sh
 ```
+
+The local RepVGG names, `repvgg_a1` and `repvgg_a2`, are trained from the repo's own initialization path. The Hailo Model Zoo-initialized variants use distinct names, `repvgg_a1_hmz` and `repvgg_a2_hmz`, so their checkpoints and Hailo artifacts do not overwrite local RepVGG runs:
+
+```bash
+ARCHES="repvgg_a1_hmz repvgg_a2_hmz" bash ./new_models_run.sh
+ARCHES="repvgg_a1_hmz repvgg_a2_hmz" bash ./new_models_eval_run.sh
+```
+
+The local ONNX files are expected at `data/pretrained/hailo_model_zoo/repvgg/extracted/RepVGG-A1.onnx` and `data/pretrained/hailo_model_zoo/repvgg/extracted/RepVGG-A2.onnx`. These official files are ImageNet classifiers, so RF training imports the RepVGG backbone tensors and keeps the binary classifier head task-specific. The older `--use-repvgg-model-zoo` flag still works for compatibility, but the `*_hmz` names are preferred for new runs.
 
 Key outputs:
 
@@ -96,7 +110,7 @@ This command:
 - discovers the current deployable checkpoints from `g2_edge_suite`
 - exports static-batch ONNX artifacts for Hailo compilation
 - creates mirrored `strict_far/exports/` roots when needed
-- writes target-specific Hailo manifest stubs for `hailo8` and `hailo8l`
+- writes target-specific Hailo manifest stubs for the requested target; the default is `hailo8`
 - writes `data/experiments/g2_edge_suite/hailo_compilation_inventory.json`
 
 HEF compilation command:
@@ -113,7 +127,7 @@ This command:
 - writes `.hef`, `.har`, `.log`, and command-record artifacts under each model's `hailo/` directory
 - updates each manifest with the real compiled artifact paths and detected Hailo tool versions
 - auto-validates compiled artifacts and leaves them non-deployable until quality and runtime gates pass
-- treats `vgg13`/`vgg16` Hailo artifacts as legacy reference only; use `vgg_small_gap` for the Hailo-friendly VGG-style path
+- treats `vgg13`/`vgg16` Hailo artifacts as legacy reference only; use `vgg_small_gap` for the Hailo-friendly VGG-style path, and `repvgg_a1_hmz`/`repvgg_a2_hmz` as Hailo-supported RepVGG Model Zoo backup candidates
 
 HEF validation command:
 

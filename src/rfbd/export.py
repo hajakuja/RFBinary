@@ -7,12 +7,13 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Dict, Iterable
 
+import onnx
 import torch
 
 from .contracts import FeatureConfig
 from .io import save_json
 from .labels import ID_TO_LABEL
-from .modeling import create_binary_model, list_supported_arches
+from .modeling import create_binary_model, list_supported_arches, prepare_model_for_export
 
 
 SUPPORTED_EXPORT_FORMATS = ("torchscript", "onnx")
@@ -63,6 +64,21 @@ def _build_export_contract(
     }
 
 
+def _inspect_onnx_metadata(path: Path) -> Dict[str, object]:
+    model = onnx.load(str(path))
+    imports = [(str(item.domain), int(item.version)) for item in model.opset_import]
+    default_opset = None
+    for domain, version in imports:
+        if domain == "":
+            default_opset = int(version)
+            break
+    return {
+        "ir_version": int(model.ir_version),
+        "opset_imports": imports,
+        "default_opset": default_opset,
+    }
+
+
 def load_export_context(
     checkpoint: str | Path,
     *,
@@ -84,6 +100,8 @@ def load_export_context(
     model = create_binary_model(arch=arch, pretrained=False, freeze_features=False)
     model.load_state_dict(ckpt["state_dict"])
     model.eval()
+    export_transforms = prepare_model_for_export(model)
+    model.eval()
 
     return {
         "checkpoint_path": ckpt_path,
@@ -94,6 +112,7 @@ def load_export_context(
         "model": model,
         "threshold": float(ckpt.get("threshold", 0.5)),
         "config": ckpt.get("config", {}),
+        "export_transforms": export_transforms,
         "label_contract": ckpt.get("label_contract")
         or {str(int(k)): str(v) for k, v in ID_TO_LABEL.items()},
     }
@@ -144,6 +163,10 @@ def export_checkpoint(
     if "onnx" in formats:
         onnx_path = out_dir / f"{stem}_{arch}.onnx"
         try:
+            # PyTorch 2.9's dynamo exporter can silently leave opset-18 graphs
+            # after failed conversion to 17. Hailo DFC 3.33 expects the legacy
+            # opset-17 graph shape with Conv kernel_shape attributes.
+            use_dynamo_exporter = bool(onnx_opset >= 18)
             torch.onnx.export(
                 model,
                 dummy,
@@ -158,6 +181,7 @@ def export_checkpoint(
                 },
                 opset_version=onnx_opset,
                 do_constant_folding=True,
+                dynamo=use_dynamo_exporter,
             )
             exported["onnx"] = str(onnx_path)
             print(f"Exported ONNX: {onnx_path}")
@@ -175,9 +199,34 @@ def export_checkpoint(
         "preprocessing_contract": ctx["contract"],
         "label_contract": ctx["label_contract"],
         "export_contract": export_contract,
+        "export_transforms": ctx["export_transforms"],
         "exported": exported,
         "skipped": skipped,
     }
+    if "onnx" in exported:
+        try:
+            onnx_meta = _inspect_onnx_metadata(Path(exported["onnx"]))
+            summary["onnx_metadata"] = {
+                "requested_opset": int(onnx_opset),
+                "actual_default_opset": onnx_meta["default_opset"],
+                "opset_imports": onnx_meta["opset_imports"],
+                "ir_version": onnx_meta["ir_version"],
+                "exporter": "dynamo" if int(onnx_opset) >= 18 else "legacy_torchscript",
+            }
+            if summary["onnx_metadata"]["actual_default_opset"] != int(onnx_opset):
+                print(
+                    "ONNX opset mismatch: "
+                    f"requested {onnx_opset}, actual {summary['onnx_metadata']['actual_default_opset']}"
+                )
+        except Exception as exc:
+            summary["onnx_metadata"] = {
+                "requested_opset": int(onnx_opset),
+                "actual_default_opset": None,
+                "opset_imports": [],
+                "ir_version": None,
+                "exporter": "dynamo" if int(onnx_opset) >= 18 else "legacy_torchscript",
+                "inspection_error": f"{type(exc).__name__}: {exc}",
+            }
     summary_path = out_dir / f"{stem}_{arch}_export_summary.json"
     save_json(summary_path, summary)
     print(f"Export summary written: {summary_path}")
@@ -193,7 +242,7 @@ def run_export(args: argparse.Namespace) -> None:
         batch_size=args.batch_size,
         onnx_opset=args.onnx_opset,
         require_onnx=args.require_onnx,
-        static_batch=args.static_batch,
+        static_batch=getattr(args, "static_batch", False),
     )
 
 

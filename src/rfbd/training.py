@@ -17,7 +17,17 @@ from .contracts import FeatureConfig
 from .io import iter_npz_files, load_npz_shard, save_json
 from .labels import ID_TO_LABEL
 from .metrics import summarize_binary, tune_threshold
-from .modeling import create_binary_model, list_supported_arches
+from .modeling import (
+    REPVGG_ARCHES,
+    REPVGG_MODEL_ZOO_ARCHES,
+    create_binary_model,
+    list_supported_arches,
+    load_repvgg_model_zoo_onnx,
+    repvgg_model_zoo_onnx_path,
+)
+
+
+DEFAULT_REPVGG_MODEL_ZOO_DIR = Path("data/pretrained/hailo_model_zoo/repvgg/extracted")
 
 
 @dataclass
@@ -31,6 +41,7 @@ class TrainConfig:
     freeze_features: bool = True
     target_far: float = 0.05
     seed: int = 13
+    repvgg_pretrained_onnx: str | None = None
 
 
 def preprocessing_contract() -> Dict[str, object]:
@@ -190,7 +201,15 @@ def train_binary_indexed(
         arch=cfg.arch,
         pretrained=cfg.pretrained,
         freeze_features=cfg.freeze_features,
-    ).to(device)
+    )
+    if cfg.repvgg_pretrained_onnx:
+        pretrained_init = load_repvgg_model_zoo_onnx(model, cfg.repvgg_pretrained_onnx)
+        setattr(model, "pretrained_init", pretrained_init)
+        print(
+            f"Loaded {cfg.arch} pretrained backbone from {cfg.repvgg_pretrained_onnx} "
+            f"({pretrained_init['loaded_tensors']} tensors, skipped {pretrained_init['skipped_head_tensors']})"
+        )
+    model = model.to(device)
 
     y_train = y[train_idx]
     y_val = y[val_idx]
@@ -296,7 +315,26 @@ def _build_cfg(args: argparse.Namespace, arch: str) -> TrainConfig:
         freeze_features=not args.unfreeze_features,
         target_far=args.target_far,
         seed=args.seed,
+        repvgg_pretrained_onnx=_resolve_repvgg_pretrained_onnx(args=args, arch=arch),
     )
+
+
+def _resolve_repvgg_pretrained_onnx(args: argparse.Namespace, arch: str) -> str | None:
+    explicit = getattr(args, "repvgg_pretrained_onnx", None)
+    use_model_zoo = bool(getattr(args, "use_repvgg_model_zoo", False))
+    auto_model_zoo = arch in REPVGG_MODEL_ZOO_ARCHES
+    if explicit and use_model_zoo:
+        raise ValueError("Use either --repvgg-pretrained-onnx or --use-repvgg-model-zoo, not both")
+    if explicit:
+        if arch not in REPVGG_ARCHES:
+            raise ValueError("--repvgg-pretrained-onnx is only valid with RepVGG architectures")
+        return str(Path(explicit))
+    if not use_model_zoo and not auto_model_zoo:
+        return None
+    if arch not in REPVGG_ARCHES:
+        raise ValueError("--use-repvgg-model-zoo is only valid with RepVGG architectures")
+    model_zoo_dir = Path(getattr(args, "repvgg_model_zoo_dir", DEFAULT_REPVGG_MODEL_ZOO_DIR))
+    return str(repvgg_model_zoo_onnx_path(arch, model_zoo_dir))
 
 
 def _run_train_impl(args: argparse.Namespace, arch: str) -> None:
@@ -313,6 +351,7 @@ def _run_train_impl(args: argparse.Namespace, arch: str) -> None:
 
     train_idx, val_idx = stratified_val_split(y, val_fraction=args.val_fraction, seed=args.seed)
     model, threshold, val_metrics = train_binary_indexed(X, y, train_idx, val_idx, cfg, device=device)
+    pretrained_init = getattr(model, "pretrained_init", None)
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -326,6 +365,7 @@ def _run_train_impl(args: argparse.Namespace, arch: str) -> None:
         "val_metrics": val_metrics,
         "preprocessing_contract": preprocessing_contract(),
         "label_contract": label_contract(),
+        "pretrained_init": pretrained_init,
     }
     torch.save(payload, ckpt_path)
 
@@ -338,6 +378,7 @@ def _run_train_impl(args: argparse.Namespace, arch: str) -> None:
             "train_size": int(len(train_idx)),
             "val_size": int(len(val_idx)),
             "preprocessing_contract": preprocessing_contract(),
+            "pretrained_init": pretrained_init,
         },
     )
     print(f"Saved model checkpoint to {ckpt_path}")
@@ -368,6 +409,24 @@ def _add_shared_train_args(p: argparse.ArgumentParser, default_model_name: str) 
 
     p.add_argument("--no-pretrained", action="store_true", default=False)
     p.add_argument("--unfreeze-features", action="store_true", default=False)
+    p.add_argument(
+        "--use-repvgg-model-zoo",
+        action="store_true",
+        default=False,
+        help="Initialize RepVGG backbones from downloaded Hailo Model Zoo ONNX deploy weights.",
+    )
+    p.add_argument(
+        "--repvgg-pretrained-onnx",
+        type=str,
+        default=None,
+        help="Explicit RepVGG-A1/A2 ONNX file to use as a pretrained deploy-form backbone initializer.",
+    )
+    p.add_argument(
+        "--repvgg-model-zoo-dir",
+        type=str,
+        default=str(DEFAULT_REPVGG_MODEL_ZOO_DIR),
+        help="Directory containing RepVGG-A1.onnx and RepVGG-A2.onnx for --use-repvgg-model-zoo or *_hmz arches.",
+    )
     p.add_argument(
         "--require-gpu",
         action="store_true",

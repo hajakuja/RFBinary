@@ -15,7 +15,9 @@ from .io import save_json
 from .metrics import summarize_binary
 from .modeling import list_supported_arches
 from .training import (
+    DEFAULT_REPVGG_MODEL_ZOO_DIR,
     TrainConfig,
+    _resolve_repvgg_pretrained_onnx,
     label_contract,
     load_dataset_arrays,
     predict_proba,
@@ -84,6 +86,7 @@ def run_eval(args: argparse.Namespace) -> None:
         freeze_features=not args.unfreeze_features,
         target_far=args.target_far,
         seed=args.seed,
+        repvgg_pretrained_onnx=_resolve_repvgg_pretrained_onnx(args=args, arch=arch),
     )
     device = resolve_device(require_gpu=bool(getattr(args, "require_gpu", False)))
 
@@ -157,6 +160,7 @@ def run_eval(args: argparse.Namespace) -> None:
                 "val_metrics": val_metrics,
                 "preprocessing_contract": preprocessing_contract(),
                 "label_contract": label_contract(),
+                "pretrained_init": getattr(model, "pretrained_init", None),
             },
             ckpt_path,
         )
@@ -165,6 +169,7 @@ def run_eval(args: argparse.Namespace) -> None:
             "checkpoint": str(ckpt_path),
             "threshold": float(threshold),
             "val_metrics": val_metrics,
+            "pretrained_init": getattr(model, "pretrained_init", None),
             "test_metrics": {
                 "roc_auc": float(test_summary.roc_auc),
                 "pr_auc": float(test_summary.pr_auc),
@@ -209,6 +214,24 @@ def add_eval_subparser(subparsers: argparse._SubParsersAction) -> None:
 
     p.add_argument("--no-pretrained", action="store_true", default=False)
     p.add_argument("--unfreeze-features", action="store_true", default=False)
+    p.add_argument(
+        "--use-repvgg-model-zoo",
+        action="store_true",
+        default=False,
+        help="Initialize RepVGG backbones from downloaded Hailo Model Zoo ONNX deploy weights.",
+    )
+    p.add_argument(
+        "--repvgg-pretrained-onnx",
+        type=str,
+        default=None,
+        help="Explicit RepVGG-A1/A2 ONNX file to use as a pretrained deploy-form backbone initializer.",
+    )
+    p.add_argument(
+        "--repvgg-model-zoo-dir",
+        type=str,
+        default=str(DEFAULT_REPVGG_MODEL_ZOO_DIR),
+        help="Directory containing RepVGG-A1.onnx and RepVGG-A2.onnx for --use-repvgg-model-zoo or *_hmz arches.",
+    )
     p.add_argument(
         "--require-gpu",
         action="store_true",

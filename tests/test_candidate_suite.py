@@ -160,6 +160,8 @@ def test_default_hailo8_roster_uses_vgg_small_gap_not_legacy_vggs(tmp_path: Path
         "resnet50",
         "regnet_x_1_6gf",
         "vgg_small_gap",
+        "repvgg_a1_hmz",
+        "repvgg_a2_hmz",
     )
     assert "vgg13" in LEGACY_REFERENCE_ARCHES
     assert "vgg16" in LEGACY_REFERENCE_ARCHES
@@ -171,6 +173,8 @@ def test_default_hailo8_roster_uses_vgg_small_gap_not_legacy_vggs(tmp_path: Path
         ("resnet50", 0.63, 45.0),
         ("regnet_x_1_6gf", 0.64, 20.0),
         ("vgg_small_gap", 0.66, 25.0),
+        ("repvgg_a1_hmz", 0.65, 18.0),
+        ("repvgg_a2_hmz", 0.67, 32.0),
     ):
         _write_json(suite_root / f"eval/{arch}/domain_holdout_report.json", _eval_report(far=0.20, recall=recall))
         _write_json(suite_root / f"bench/{arch}_runtime.json", _bench_report(loaded_p95_ms=200.0))
@@ -192,5 +196,7 @@ def test_default_hailo8_roster_uses_vgg_small_gap_not_legacy_vggs(tmp_path: Path
 
     assert "vgg13" not in ranked_arches
     assert "vgg16" not in ranked_arches
+    assert "repvgg_a1_hmz" in ranked_arches
+    assert "repvgg_a2_hmz" in ranked_arches
     assert vgg_small_gap_row["vgg_family_stop"] is False
-    assert leaderboard["strict_candidates"][0] == "vgg_small_gap"
+    assert leaderboard["strict_candidates"][0] == "repvgg_a2_hmz"

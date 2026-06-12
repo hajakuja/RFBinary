@@ -1,7 +1,7 @@
 import pytest
 
 from rfbd.cli import build_parser
-from rfbd.training import resolve_device
+from rfbd.training import _resolve_repvgg_pretrained_onnx, resolve_device
 
 
 def test_resolve_device_require_gpu_raises_when_cuda_unavailable(monkeypatch):
@@ -28,6 +28,40 @@ def test_cli_parses_require_gpu_flags():
     )
     assert train_args.require_gpu is True
     assert train_args.arch == "vgg_small_gap"
+
+    repvgg_train_args = parser.parse_args(
+        [
+            "train",
+            "binary",
+            "--dataset-dir",
+            "/tmp/ds",
+            "--out-dir",
+            "/tmp/out",
+            "--arch",
+            "repvgg_a1",
+            "--use-repvgg-model-zoo",
+            "--repvgg-model-zoo-dir",
+            "/tmp/repvgg",
+        ]
+    )
+    assert repvgg_train_args.use_repvgg_model_zoo is True
+    assert repvgg_train_args.repvgg_model_zoo_dir == "/tmp/repvgg"
+
+    repvgg_hmz_train_args = parser.parse_args(
+        [
+            "train",
+            "binary",
+            "--dataset-dir",
+            "/tmp/ds",
+            "--out-dir",
+            "/tmp/out",
+            "--arch",
+            "repvgg_a1_hmz",
+            "--repvgg-model-zoo-dir",
+            "/tmp/repvgg",
+        ]
+    )
+    assert _resolve_repvgg_pretrained_onnx(repvgg_hmz_train_args, "repvgg_a1_hmz") == "/tmp/repvgg/RepVGG-A1.onnx"
 
     legacy_args = parser.parse_args(
         [
@@ -56,6 +90,21 @@ def test_cli_parses_require_gpu_flags():
     )
     assert eval_args.require_gpu is True
     assert eval_args.arch == "resnet50"
+
+    repvgg_eval_args = parser.parse_args(
+        [
+            "eval",
+            "--dataset-dir",
+            "/tmp/ds",
+            "--out-dir",
+            "/tmp/out",
+            "--arch",
+            "repvgg_a2",
+            "--repvgg-pretrained-onnx",
+            "/tmp/RepVGG-A2.onnx",
+        ]
+    )
+    assert repvgg_eval_args.repvgg_pretrained_onnx == "/tmp/RepVGG-A2.onnx"
 
     export_args = parser.parse_args(
         [

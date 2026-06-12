@@ -15,10 +15,13 @@ LEADERBOARD_ROOT="${OUT_ROOT}/leaderboard"
 STRICT_ROOT="${OUT_ROOT}/strict_far"
 
 ARCHES=(
-  "vgg16"
-  "resnet18"
-  "mobilenet_v3_small"
   "shufflenet_v2_x1_0"
+  "resnet34"
+  "resnet50"
+  "regnet_x_1_6gf"
+  "vgg_small_gap"
+  "repvgg_a1_hmz"
+  "repvgg_a2_hmz"
 )
 
 EPOCHS="${EPOCHS:-8}"
@@ -31,6 +34,15 @@ BENCH_ITERS="${BENCH_ITERS:-120}"
 BENCH_WARMUP="${BENCH_WARMUP:-20}"
 REQUIRE_GPU="${REQUIRE_GPU:-0}"
 SKIP_EXISTING="${SKIP_EXISTING:-1}"
+HAILO_TARGET="${HAILO_TARGET:-hailo8}"
+HAILO_REAL_PROBE_SAMPLES="${HAILO_REAL_PROBE_SAMPLES:-32}"
+HAILO_KEEP_GOING="${HAILO_KEEP_GOING:-0}"
+HAILO_BIN="${HAILO_BIN:-}"
+HAILORTCLI_BIN="${HAILORTCLI_BIN:-}"
+HAILO_RUNTIME_METRICS_JSON="${HAILO_RUNTIME_METRICS_JSON:-}"
+HAILO_HARDWARE_RESULTS_JSON="${HAILO_HARDWARE_RESULTS_JSON:-}"
+USE_REPVGG_MODEL_ZOO="${USE_REPVGG_MODEL_ZOO:-0}"
+REPVGG_MODEL_ZOO_DIR="${REPVGG_MODEL_ZOO_DIR:-${ROOT}/data/pretrained/hailo_model_zoo/repvgg/extracted}"
 
 mkdir -p "${MODEL_ROOT}" "${EVAL_ROOT}" "${EXPORT_ROOT}" "${BENCH_ROOT}" "${LEADERBOARD_ROOT}" "${STRICT_ROOT}"
 
@@ -53,6 +65,10 @@ for arch in "${ARCHES[@]}"; do
   export_summary="${arch_export_dir}/${arch}_binary_${arch}_export_summary.json"
   bench_json="${BENCH_ROOT}/${arch}_runtime.json"
   mkdir -p "${arch_model_dir}" "${arch_eval_dir}" "${arch_export_dir}"
+  repvgg_pretrain_args=()
+  if [[ "${USE_REPVGG_MODEL_ZOO}" == "1" && ( "${arch}" == "repvgg_a1" || "${arch}" == "repvgg_a2" || "${arch}" == "repvgg_a1_hmz" || "${arch}" == "repvgg_a2_hmz" ) ]]; then
+    repvgg_pretrain_args+=(--use-repvgg-model-zoo --repvgg-model-zoo-dir "${REPVGG_MODEL_ZOO_DIR}")
+  fi
 
   if [[ "${SKIP_EXISTING}" == "1" && -f "${model_ckpt}" ]]; then
     echo "Skipping train; found ${model_ckpt}"
@@ -67,6 +83,7 @@ for arch in "${ARCHES[@]}"; do
       --val-fraction "${VAL_FRACTION}" \
       --target-far "${TARGET_FAR}" \
       --seed "${SEED}" \
+      "${repvgg_pretrain_args[@]}" \
       "${GPU_FLAG[@]}"
   fi
 
@@ -85,6 +102,7 @@ for arch in "${ARCHES[@]}"; do
       --custom-domain custom_bg \
       --custom-session-fraction 0.2 \
       --seed "${SEED}" \
+      "${repvgg_pretrain_args[@]}" \
       "${GPU_FLAG[@]}"
   fi
 
@@ -121,148 +139,46 @@ for arch in "${ARCHES[@]}"; do
 done
 
 echo ""
-echo "=== Build leaderboard and choose strict-FAR candidates ==="
-SUITE_ROOT="${OUT_ROOT}" "${PY}" - <<'PY'
-import csv
-import json
-import math
-import os
-from pathlib import Path
-
-suite_root = Path(os.environ["SUITE_ROOT"])
-arches = ["vgg16", "resnet18", "mobilenet_v3_small", "shufflenet_v2_x1_0"]
-
-def load_json(path: Path):
-    if not path.exists():
-        return {}
-    return json.loads(path.read_text(encoding="utf-8"))
-
-def best_loaded_runtime(rows):
-    best = None
-    for row in rows:
-        if row.get("load_state") != "loaded":
-            continue
-        if "error" in row:
-            continue
-        p95 = row.get("latency_ms_p95")
-        if p95 is None or not isinstance(p95, (float, int)) or math.isnan(float(p95)):
-            continue
-        if best is None or float(p95) < best["latency_ms_p95"]:
-            best = {
-                "runtime": row.get("runtime"),
-                "latency_ms_p95": float(p95),
-                "latency_ms_p50": float(row.get("latency_ms_p50", float("nan"))),
-                "throughput_fps": float(row.get("throughput_fps", float("nan"))),
-            }
-    return best
-
-records = []
-for arch in arches:
-    eval_report = load_json(suite_root / "eval" / arch / "domain_holdout_report.json")
-    bench_report = load_json(suite_root / "bench" / f"{arch}_runtime.json")
-
-    split_metrics = eval_report.get("splits", {})
-    avg_far = float("nan")
-    avg_recall = float("nan")
-    if split_metrics:
-        fars = []
-        recalls = []
-        for split in split_metrics.values():
-            tm = split.get("test_metrics", {})
-            fars.append(float(tm.get("far", float("nan"))))
-            recalls.append(float(tm.get("recall", float("nan"))))
-        avg_far = float(sum(fars) / len(fars))
-        avg_recall = float(sum(recalls) / len(recalls))
-
-    best_loaded = best_loaded_runtime(bench_report.get("rows", []))
-    records.append(
-        {
-            "arch": arch,
-            "avg_far": avg_far,
-            "avg_recall": avg_recall,
-            "loaded_runtime": (best_loaded or {}).get("runtime"),
-            "loaded_p95_ms": (best_loaded or {}).get("latency_ms_p95", float("nan")),
-            "loaded_p50_ms": (best_loaded or {}).get("latency_ms_p50", float("nan")),
-            "loaded_throughput_fps": (best_loaded or {}).get("throughput_fps", float("nan")),
-            "splits": split_metrics,
-        }
-    )
-
-base = next((r for r in records if r["arch"] == "vgg16"), None)
-base_splits = base.get("splits", {}) if base else {}
-
-for rec in records:
-    far_ok = True
-    recall_ok = True
-    for split_name, split_data in rec["splits"].items():
-        cand_tm = split_data.get("test_metrics", {})
-        base_tm = base_splits.get(split_name, {}).get("test_metrics", {})
-        base_far = float(base_tm.get("far", 0.0))
-        base_recall = float(base_tm.get("recall", 1.0))
-        cand_far = float(cand_tm.get("far", 1.0))
-        cand_recall = float(cand_tm.get("recall", 0.0))
-        if cand_far > base_far + 0.005:
-            far_ok = False
-        if cand_recall < base_recall - 0.03:
-            recall_ok = False
-
-    speed_ok = (
-        isinstance(rec["loaded_p95_ms"], (float, int))
-        and not math.isnan(float(rec["loaded_p95_ms"]))
-        and float(rec["loaded_p95_ms"]) <= 250.0
-        and float(rec.get("loaded_throughput_fps", float("nan"))) >= 4.0
-    )
-    rec["gate_far"] = bool(far_ok)
-    rec["gate_recall"] = bool(recall_ok)
-    rec["gate_speed"] = bool(speed_ok)
-    rec["gate_pass"] = bool(far_ok and recall_ok and speed_ok)
-
-records_sorted = sorted(
-    records,
-    key=lambda r: float("inf")
-    if not isinstance(r.get("loaded_p95_ms"), (float, int)) or math.isnan(float(r["loaded_p95_ms"]))
-    else float(r["loaded_p95_ms"]),
+echo "=== [base] Hailo-8 compile/validate ==="
+hailo_base_args=(
+  -m rfbd.cli hailo compile
+  --repo-root "${ROOT}"
+  --target "${HAILO_TARGET}"
+  --no-strict-far
+  --calibration-dataset-dir "${DATASET_DIR}"
+  --real-probe-samples "${HAILO_REAL_PROBE_SAMPLES}"
+  --seed "${SEED}"
 )
+if [[ "${SKIP_EXISTING}" == "1" ]]; then
+  hailo_base_args+=(--skip-existing)
+fi
+if [[ "${HAILO_KEEP_GOING}" == "1" ]]; then
+  hailo_base_args+=(--keep-going)
+fi
+if [[ -n "${HAILO_BIN}" ]]; then
+  hailo_base_args+=(--hailo-bin "${HAILO_BIN}")
+fi
+if [[ -n "${HAILORTCLI_BIN}" ]]; then
+  hailo_base_args+=(--hailortcli-bin "${HAILORTCLI_BIN}")
+fi
+if [[ -n "${HAILO_RUNTIME_METRICS_JSON}" ]]; then
+  hailo_base_args+=(--runtime-metrics-json "${HAILO_RUNTIME_METRICS_JSON}")
+fi
+if [[ -n "${HAILO_HARDWARE_RESULTS_JSON}" ]]; then
+  hailo_base_args+=(--hardware-results-json "${HAILO_HARDWARE_RESULTS_JSON}")
+fi
+for arch in "${ARCHES[@]}"; do
+  hailo_base_args+=(--model-id "${arch}_binary")
+done
+"${PY}" "${hailo_base_args[@]}"
 
-leaderboard_dir = suite_root / "leaderboard"
-leaderboard_dir.mkdir(parents=True, exist_ok=True)
-
-(leaderboard_dir / "leaderboard.json").write_text(
-    json.dumps({"records": records_sorted}, indent=2),
-    encoding="utf-8",
-)
-
-csv_path = leaderboard_dir / "leaderboard.csv"
-fields = [
-    "arch",
-    "loaded_runtime",
-    "loaded_p50_ms",
-    "loaded_p95_ms",
-    "loaded_throughput_fps",
-    "avg_far",
-    "avg_recall",
-    "gate_far",
-    "gate_recall",
-    "gate_speed",
-    "gate_pass",
-]
-with csv_path.open("w", newline="", encoding="utf-8") as f:
-    writer = csv.DictWriter(f, fieldnames=fields)
-    writer.writeheader()
-    for row in records_sorted:
-        writer.writerow({k: row.get(k) for k in fields})
-
-strict_candidates = [
-    row["arch"]
-    for row in records_sorted
-    if row["arch"] != "vgg16" and isinstance(row.get("loaded_p95_ms"), (float, int)) and not math.isnan(float(row["loaded_p95_ms"]))
-][:2]
-
-(leaderboard_dir / "strict_far_candidates.txt").write_text("\n".join(strict_candidates) + "\n", encoding="utf-8")
-print("leaderboard_json", leaderboard_dir / "leaderboard.json")
-print("leaderboard_csv", csv_path)
-print("strict_far_candidates", strict_candidates)
-PY
+echo ""
+echo "=== Build Hailo-8-first leaderboard and choose strict-FAR candidates ==="
+leaderboard_args=(-m rfbd.candidate_suite --suite-root "${OUT_ROOT}")
+for arch in "${ARCHES[@]}"; do
+  leaderboard_args+=(--arch "${arch}")
+done
+"${PY}" "${leaderboard_args[@]}"
 
 mapfile -t strict_candidates < <(head -n 2 "${LEADERBOARD_ROOT}/strict_far_candidates.txt" | sed '/^\s*$/d')
 
@@ -274,6 +190,10 @@ for arch in "${strict_candidates[@]}"; do
   strict_model_ckpt="${strict_model_dir}/${arch}_binary_far003.pt"
   strict_eval_report="${strict_eval_dir}/domain_holdout_report.json"
   mkdir -p "${strict_model_dir}" "${strict_eval_dir}"
+  repvgg_pretrain_args=()
+  if [[ "${USE_REPVGG_MODEL_ZOO}" == "1" && ( "${arch}" == "repvgg_a1" || "${arch}" == "repvgg_a2" || "${arch}" == "repvgg_a1_hmz" || "${arch}" == "repvgg_a2_hmz" ) ]]; then
+    repvgg_pretrain_args+=(--use-repvgg-model-zoo --repvgg-model-zoo-dir "${REPVGG_MODEL_ZOO_DIR}")
+  fi
 
   if [[ "${SKIP_EXISTING}" == "1" && -f "${strict_model_ckpt}" ]]; then
     echo "Skipping strict-FAR train; found ${strict_model_ckpt}"
@@ -288,6 +208,7 @@ for arch in "${strict_candidates[@]}"; do
       --val-fraction "${VAL_FRACTION}" \
       --target-far "${STRICT_TARGET_FAR}" \
       --seed "${SEED}" \
+      "${repvgg_pretrain_args[@]}" \
       "${GPU_FLAG[@]}"
   fi
 
@@ -305,9 +226,45 @@ for arch in "${strict_candidates[@]}"; do
       --custom-domain custom_bg \
       --custom-session-fraction 0.2 \
       --seed "${SEED}" \
+      "${repvgg_pretrain_args[@]}" \
       "${GPU_FLAG[@]}"
   fi
 done
+
+if [[ "${#strict_candidates[@]}" -gt 0 ]]; then
+  echo ""
+  echo "=== [strict-FAR] Hailo-8 compile/validate ==="
+  hailo_strict_args=(
+    -m rfbd.cli hailo compile
+    --repo-root "${ROOT}"
+    --target "${HAILO_TARGET}"
+    --calibration-dataset-dir "${DATASET_DIR}"
+    --real-probe-samples "${HAILO_REAL_PROBE_SAMPLES}"
+    --seed "${SEED}"
+  )
+  if [[ "${SKIP_EXISTING}" == "1" ]]; then
+    hailo_strict_args+=(--skip-existing)
+  fi
+  if [[ "${HAILO_KEEP_GOING}" == "1" ]]; then
+    hailo_strict_args+=(--keep-going)
+  fi
+  if [[ -n "${HAILO_BIN}" ]]; then
+    hailo_strict_args+=(--hailo-bin "${HAILO_BIN}")
+  fi
+  if [[ -n "${HAILORTCLI_BIN}" ]]; then
+    hailo_strict_args+=(--hailortcli-bin "${HAILORTCLI_BIN}")
+  fi
+  if [[ -n "${HAILO_RUNTIME_METRICS_JSON}" ]]; then
+    hailo_strict_args+=(--runtime-metrics-json "${HAILO_RUNTIME_METRICS_JSON}")
+  fi
+  if [[ -n "${HAILO_HARDWARE_RESULTS_JSON}" ]]; then
+    hailo_strict_args+=(--hardware-results-json "${HAILO_HARDWARE_RESULTS_JSON}")
+  fi
+  for arch in "${strict_candidates[@]}"; do
+    hailo_strict_args+=(--model-id "${arch}_binary_far003")
+  done
+  "${PY}" "${hailo_strict_args[@]}"
+fi
 
 echo ""
 echo "=== Strict-FAR summary ==="

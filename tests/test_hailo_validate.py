@@ -8,9 +8,11 @@ import torch
 
 from rfbd.hailo import (
     DEFAULT_FALLBACK_MODEL_ID,
+    HAILO_EMULATION_BATCH_SIZE,
     _default_host_contract,
     _model_script_lines,
     _prepare_hailo_workspace,
+    _run_hailo_emulation_stage,
     _validate_single_target,
     build_hailo_calibration_set,
     measure_compute_spec_feature_stats,
@@ -95,6 +97,99 @@ def _fake_export_checkpoint(**kwargs):
     summary_path = out_dir / f"{checkpoint_path.stem}_{arch}_export_summary.json"
     summary_path.write_text(json.dumps(summary), encoding="utf-8")
     return summary
+
+
+def test_hailo_emulation_batches_probe_frames(tmp_path: Path, monkeypatch):
+    har_path = tmp_path / "demo.har"
+    har_path.write_text("fake", encoding="utf-8")
+    calls = []
+
+    class FakeInferenceContext:
+        SDK_QUANTIZED = "quantized"
+
+    class FakeContext:
+        def __enter__(self):
+            return "ctx"
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class FakeRunner:
+        def __init__(self, *, har):
+            assert har == str(har_path)
+
+        def infer_context(self, ctx_enum):
+            assert ctx_enum == FakeInferenceContext.SDK_QUANTIZED
+            return FakeContext()
+
+        def infer(self, ctx, data, batch_size):
+            assert ctx == "ctx"
+            calls.append((tuple(data.shape), batch_size))
+            idx = np.arange(len(data), dtype=np.float32)
+            return np.stack([-idx, idx], axis=1)
+
+    monkeypatch.setattr("rfbd.hailo._optional_import_hailo_sdk", lambda: (FakeRunner, FakeInferenceContext))
+
+    frames = np.zeros((HAILO_EMULATION_BATCH_SIZE + 2, 224, 224, 1), dtype=np.float32)
+    logits = _run_hailo_emulation_stage(
+        har_path=har_path,
+        context_name="SDK_QUANTIZED",
+        host_frames=frames,
+    )
+
+    assert logits.shape == (HAILO_EMULATION_BATCH_SIZE + 2, 2)
+    assert calls == [
+        ((HAILO_EMULATION_BATCH_SIZE, 224, 224, 1), HAILO_EMULATION_BATCH_SIZE),
+        ((2, 224, 224, 1), 2),
+    ]
+
+
+def test_hailo_emulation_falls_back_to_single_frame(tmp_path: Path, monkeypatch):
+    har_path = tmp_path / "demo.har"
+    har_path.write_text("fake", encoding="utf-8")
+    calls = []
+
+    class FakeInferenceContext:
+        SDK_FP_OPTIMIZED = "fp"
+
+    class FakeContext:
+        def __enter__(self):
+            return "ctx"
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class FakeRunner:
+        def __init__(self, *, har):
+            assert har == str(har_path)
+
+        def infer_context(self, ctx_enum):
+            assert ctx_enum == FakeInferenceContext.SDK_FP_OPTIMIZED
+            return FakeContext()
+
+        def infer(self, ctx, data, batch_size):
+            assert ctx == "ctx"
+            calls.append((tuple(data.shape), batch_size))
+            if batch_size > 1:
+                raise RuntimeError("batching unsupported")
+            return np.array([[-1.0, 1.0]], dtype=np.float32)
+
+    monkeypatch.setattr("rfbd.hailo._optional_import_hailo_sdk", lambda: (FakeRunner, FakeInferenceContext))
+
+    frames = np.zeros((3, 224, 224, 1), dtype=np.float32)
+    logits = _run_hailo_emulation_stage(
+        har_path=har_path,
+        context_name="SDK_FP_OPTIMIZED",
+        host_frames=frames,
+    )
+
+    assert logits.shape == (3, 2)
+    assert calls == [
+        ((3, 224, 224, 1), 3),
+        ((1, 224, 224, 1), 1),
+        ((1, 224, 224, 1), 1),
+        ((1, 224, 224, 1), 1),
+    ]
 
 
 @pytest.mark.parametrize("arch", ["vgg13", "vgg16"])
